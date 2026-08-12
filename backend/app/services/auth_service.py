@@ -78,6 +78,37 @@ async def _create_and_send_otp(
         if elapsed < cooldown:
             raise OtpCooldownActive(retry_after_seconds=int((cooldown - elapsed).total_seconds()) + 1)
 
+    gateway = get_gateway()
+
+    # Provider-managed OTP (see NotificationGateway.verifies_otp_externally,
+    # e.g. Infobip's 2FA product): the provider generates and owns the PIN
+    # value, this app never sees it, so there's no code to hash -- send_otp's
+    # `code` argument is unused for these gateways, and the resulting
+    # external_reference (e.g. Infobip's pinId) is what verify_otp_external
+    # is later called with instead of a local hash comparison.
+    if gateway.verifies_otp_externally:
+        result = await gateway.send_otp(phone_number, "")
+        otp = OtpVerification(
+            phone_number=phone_number,
+            user_id=user_id,
+            purpose=purpose,
+            code_hash=None,
+            external_reference=result.external_reference,
+            channel="sms",
+            expires_at=datetime.now(UTC) + timedelta(minutes=settings.otp_ttl_minutes),
+        )
+        db.add(otp)
+        await db.flush()
+        await sms_outbox_service.record_send_result(
+            db,
+            to_phone_number=phone_number,
+            purpose=SmsOutboxPurpose.otp,
+            body="[PIN administrado por el proveedor -- 2FA de Infobip]",
+            result=result,
+            related_otp_id=otp.id,
+        )
+        return otp
+
     code = generate_otp_code()
     otp = OtpVerification(
         phone_number=phone_number,
@@ -90,7 +121,6 @@ async def _create_and_send_otp(
     db.add(otp)
     await db.flush()
 
-    gateway = get_gateway()
     result = await gateway.send_otp(phone_number, code)
     await sms_outbox_service.record_send_result(
         db,
@@ -150,7 +180,19 @@ async def _consume_otp(
         raise TooManyOtpAttempts()
 
     otp.attempt_count += 1
-    if not verify_otp_code(code, otp.code_hash):
+
+    if otp.external_reference:
+        gateway = get_gateway()
+        verified = await gateway.verify_otp_external(external_reference=otp.external_reference, code=code)
+    elif otp.code_hash:
+        verified = verify_otp_code(code, otp.code_hash)
+    else:
+        # Neither set means the original send itself failed (see
+        # _create_and_send_otp) -- there's nothing to check the code
+        # against, so it can never verify.
+        verified = False
+
+    if not verified:
         await db.flush()
         raise InvalidOrExpiredOtp()
 

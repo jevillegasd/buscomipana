@@ -18,7 +18,12 @@ class OtpVerification(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     phone_number: Mapped[str] = mapped_column(String(32), nullable=False)
     user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
     purpose: Mapped[OtpPurpose] = mapped_column(str_enum(OtpPurpose, 32), nullable=False)
-    code_hash: Mapped[str] = mapped_column(String(200), nullable=False)
+    # Nullable because a provider-managed OTP (see NotificationGateway.
+    # verifies_otp_externally, e.g. Infobip's 2FA product) never gives this
+    # app the actual code to hash -- external_reference is set instead, and
+    # auth_service._consume_otp checks the provider's own verify endpoint.
+    code_hash: Mapped[str | None] = mapped_column(String(200))
+    external_reference: Mapped[str | None] = mapped_column(String(64))
     channel: Mapped[Channel] = mapped_column(str_enum(Channel, 20), nullable=False, default=Channel.sms)
     attempt_count: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=0)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

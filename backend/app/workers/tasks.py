@@ -6,7 +6,7 @@ from sqlalchemy import select
 
 from app.core.database import async_session_factory
 from app.gateways.factory import get_gateway
-from app.models.enums import SmsOutboxStatus
+from app.models.enums import SmsOutboxPurpose, SmsOutboxStatus
 from app.models.sms import SmsOutboxEntry
 from app.workers.celery_app import celery_app
 
@@ -57,6 +57,15 @@ async def _retry_failed_sms() -> int:
             select(SmsOutboxEntry).where(
                 SmsOutboxEntry.status == SmsOutboxStatus.failed,
                 SmsOutboxEntry.attempt_count < MAX_SMS_ATTEMPTS,
+                # OTP entries are excluded: send_queued_sms retries by
+                # resending entry.body verbatim through the generic SMS API,
+                # which is actively wrong for a provider-managed OTP (see
+                # NotificationGateway.verifies_otp_externally) -- entry.body
+                # there is just a placeholder, not the code the user needs.
+                # Even for a locally-generated code, resending a stale one
+                # minutes later isn't useful -- the user already has their
+                # own "Reenviar codigo" button to request a fresh one.
+                SmsOutboxEntry.purpose != SmsOutboxPurpose.otp,
             )
         )
         entries = result.scalars().all()

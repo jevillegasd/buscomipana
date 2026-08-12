@@ -36,6 +36,17 @@ class Settings(BaseSettings):
     infobip_sender_id: str = "Buscomipana"
     infobip_webhook_shared_secret: str = "change-me"
 
+    # OTP codes go through Infobip's dedicated 2FA product (/2fa/2/...), not
+    # the generic SMS API -- several Colombian carriers reject OTP traffic
+    # sent over the generic route ("Account not provisioned for the
+    # requested channel", error 592 / REJECTED_NETWORK). Leave both blank to
+    # have InfobipGateway auto-provision a 2FA Application + Message
+    # Template on first use (see infobip_gateway.py); once provisioned it
+    # logs the IDs so they can be pinned here instead of re-provisioning a
+    # new pair on every process restart.
+    infobip_2fa_application_id: str = ""
+    infobip_2fa_message_id: str = ""
+
     admin_phone_numbers: str = ""
 
     otp_code_length: int = 6

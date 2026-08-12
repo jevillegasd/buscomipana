@@ -48,6 +48,11 @@ def test_send_queued_sms_marks_sent_via_mock_gateway(monkeypatch):
 
 
 def test_retry_failed_sms_requeues_only_failed_under_max_attempts(monkeypatch):
+    # Purpose here is deliberately ping_notification, not otp -- OTP entries
+    # are excluded from this sweep entirely (see _retry_failed_sms), so using
+    # SmsOutboxPurpose.otp fixtures would make every case here vanish from
+    # the query regardless of status/attempt_count, and the test would not
+    # actually exercise the filtering logic it's named for.
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
 
@@ -60,21 +65,21 @@ def test_retry_failed_sms_requeues_only_failed_under_max_attempts(monkeypatch):
                 [
                     SmsOutboxEntry(
                         to_phone_number="+573001111111",
-                        purpose=SmsOutboxPurpose.otp,
+                        purpose=SmsOutboxPurpose.ping_notification,
                         body="retryable",
                         status=SmsOutboxStatus.failed,
                         attempt_count=1,
                     ),
                     SmsOutboxEntry(
                         to_phone_number="+573002222222",
-                        purpose=SmsOutboxPurpose.otp,
+                        purpose=SmsOutboxPurpose.ping_notification,
                         body="exhausted",
                         status=SmsOutboxStatus.failed,
                         attempt_count=tasks_module.MAX_SMS_ATTEMPTS,
                     ),
                     SmsOutboxEntry(
                         to_phone_number="+573003333333",
-                        purpose=SmsOutboxPurpose.otp,
+                        purpose=SmsOutboxPurpose.ping_notification,
                         body="already sent",
                         status=SmsOutboxStatus.sent,
                         attempt_count=1,
