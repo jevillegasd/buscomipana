@@ -6,7 +6,7 @@ creates a "pending, unclaimed" row (target_user_id NULL, target_phone_number
 set) instead of being rejected outright. See
 relative_link_service.request_link / resolve_open_links_for_new_user.
 
-Revision ID: 0004_relative_link_unclaimed_target
+Revision ID: 0004_relative_link_unclaimed
 Revises: 0003_add_policy_acceptances
 Create Date: 2026-08-12
 
@@ -15,7 +15,7 @@ import sqlalchemy as sa
 
 from alembic import op
 
-revision = "0004_relative_link_unclaimed_target"
+revision = "0004_relative_link_unclaimed"
 down_revision = "0003_add_policy_acceptances"
 branch_labels = None
 depends_on = None
