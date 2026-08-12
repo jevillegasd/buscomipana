@@ -33,7 +33,7 @@ export default function App() {
   useLocation();
 
   return (
-    <div className="max-w-lg mx-auto min-h-screen flex flex-col">
+    <div className="w-full min-h-screen flex flex-col">
       <OfflineBanner />
       {isLoggedIn() && <NavBar />}
       <main className="flex-1 p-4">

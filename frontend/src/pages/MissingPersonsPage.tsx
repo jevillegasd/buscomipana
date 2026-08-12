@@ -199,7 +199,7 @@ export default function MissingPersonsPage() {
       <h1 className="text-2xl font-bold text-ink">Reportar un pana desaparecido o en pie</h1>
       <p className="rounded-md border border-pending/30 bg-pending/10 text-pending text-xs px-3 py-2">
         BuscoMiPana no es un registro de personas desaparecidas. La información aquí referenciada es visible
-        solo a personas con vínculos confirmados.
+        solo a personas con vínculos confirmados u organismos de socorro certificados.
       </p>
       <p className="text-sm text-muted">
         Cruzamos el número de teléfono con las cuentas registradas, incluyendo coincidencias cercanas por
