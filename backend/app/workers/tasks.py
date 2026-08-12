@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 
-from app.core.database import async_session_factory
+from app.core.database import async_session_factory, engine
 from app.gateways.factory import get_gateway
 from app.models.enums import SmsOutboxStatus
 from app.models.sms import SmsOutboxEntry
@@ -13,12 +13,26 @@ from app.workers.celery_app import celery_app
 MAX_SMS_ATTEMPTS = 5
 
 
+async def _run_and_dispose(coro):
+    try:
+        return await coro
+    finally:
+        # asyncpg connections are bound to the event loop that created them, but
+        # the engine's pool is a module-level singleton reused across every
+        # asyncio.run() call below -- each of which gets its own fresh loop.
+        # Without disposing here, a connection checked into the pool by this
+        # task's loop gets handed to the next task's (different) loop and blows
+        # up with "attached to a different loop". Disposing while still inside
+        # this task's loop drops those connections before that can happen.
+        await engine.dispose()
+
+
 def _run(coro):
     # Each task invocation gets its own event loop. Safe because Celery task
     # bodies run in a worker process/thread with no pre-existing running loop --
     # unlike the FastAPI request path, which awaits the async services directly
     # instead of going through Celery, precisely to avoid that conflict.
-    return asyncio.run(coro)
+    return asyncio.run(_run_and_dispose(coro))
 
 
 @celery_app.task(name="send_queued_sms")
