@@ -38,19 +38,29 @@ async function cropToBlob(imageSrc: string, area: Area): Promise<Blob> {
 // happens server-side (storage/image_processing.process_image) as the source
 // of truth, this only lets the user choose *which* square region to keep.
 export default function ImageCropModal({ file, onCancel, onCropped }: ImageCropModalProps) {
-  const [imageSrc] = useState(() => URL.createObjectURL(file));
+  const [imageSrc, setImageSrc] = useState<string | null>(null);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => () => URL.revokeObjectURL(imageSrc), [imageSrc]);
+  // Object URL is created *and* revoked inside the same effect run, not
+  // split between a useState initializer and a separate cleanup -- under
+  // React 18 StrictMode's dev-only mount/unmount/remount simulation, a
+  // cleanup that revokes a URL created outside the effect fires against the
+  // very first (and only) URL ever created, leaving <img> pointed at an
+  // already-revoked blob after the simulated remount.
+  useEffect(() => {
+    const url = URL.createObjectURL(file);
+    setImageSrc(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
 
   const handleCropComplete = useCallback((_area: Area, pixels: Area) => setCroppedAreaPixels(pixels), []);
 
   async function confirm() {
-    if (!croppedAreaPixels) return;
+    if (!croppedAreaPixels || !imageSrc) return;
     setProcessing(true);
     setError(null);
     try {
@@ -68,15 +78,17 @@ export default function ImageCropModal({ file, onCancel, onCropped }: ImageCropM
       <div className="w-full max-w-sm rounded-lg bg-card border border-card flex flex-col gap-3 p-3">
         <p className="text-sm font-medium text-ink">Ajusta el recorte</p>
         <div className="relative w-full h-64 bg-night rounded-md overflow-hidden">
-          <Cropper
-            image={imageSrc}
-            crop={crop}
-            zoom={zoom}
-            aspect={1}
-            onCropChange={setCrop}
-            onZoomChange={setZoom}
-            onCropComplete={handleCropComplete}
-          />
+          {imageSrc && (
+            <Cropper
+              image={imageSrc}
+              crop={crop}
+              zoom={zoom}
+              aspect={1}
+              onCropChange={setCrop}
+              onZoomChange={setZoom}
+              onCropComplete={handleCropComplete}
+            />
+          )}
         </div>
         <input
           type="range"

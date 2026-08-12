@@ -23,17 +23,17 @@ export default function NavBar() {
           Estado
         </NavLink>
         <NavLink to="/relatives" className={linkClass}>
-          Familiares
+          Mis Panas
         </NavLink>
         <NavLink to="/missing-persons" className={linkClass}>
-          Desaparecidos
+          Perdidos
         </NavLink>
         <NavLink to="/profile" className={linkClass}>
           Perfil
         </NavLink>
       </div>
       <button onClick={logout} className="text-sm text-muted hover:text-ink">
-        Cerrar sesión
+        Salir
       </button>
     </nav>
   );
