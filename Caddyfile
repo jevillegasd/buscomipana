@@ -1,4 +1,8 @@
-{$PUBLIC_DOMAIN} {
+http://www.{$PUBLIC_DOMAIN} {
+	redir https://{$PUBLIC_DOMAIN}{uri} permanent
+}
+
+http://{$PUBLIC_DOMAIN} {
 	encode gzip
 
 	# Everything the API owns lives under these paths on the SAME public
