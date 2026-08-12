@@ -23,10 +23,14 @@ class BloodType(str, enum.Enum):
     o_neg = "O-"
 
 
-class SexAtBirth(str, enum.Enum):
+class DistinguishableGender(str, enum.Enum):
+    """Presentation-based, not a legal/registry fact -- this is what a
+    rescuer sees and can use to identify someone in the field, so the
+    options describe how a person presents rather than sex at birth."""
+
     male = "male"
     female = "female"
-    intersex = "intersex"
+    other = "other"
     prefer_not_to_say = "prefer_not_to_say"
 
 

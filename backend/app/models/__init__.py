@@ -11,6 +11,7 @@ from app.models.otp import (
     TrustedDevice,
 )
 from app.models.ping import Ping, Pong
+from app.models.policy_acceptance import PolicyAcceptance
 from app.models.relative_link import RelativeLink, ResponderCredential
 from app.models.sms import InboundSmsMessage, SmsOutboxEntry
 from app.models.user import User
@@ -25,6 +26,7 @@ __all__ = [
     "PhoneNumberChange",
     "Ping",
     "PingAnalyticsEvent",
+    "PolicyAcceptance",
     "Pong",
     "RelativeLink",
     "ResponderCredential",

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, ApiError, markLoggedIn } from "../api/client";
+import PrivacyPolicyModal from "../components/PrivacyPolicyModal";
 import type { OtpRequestResponse, TokenPair } from "../api/types";
 
 export default function LoginPage() {
@@ -11,6 +12,7 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
+  const [showPolicy, setShowPolicy] = useState(false);
 
   useEffect(() => {
     if (resendCooldown <= 0) return;
@@ -154,6 +156,18 @@ export default function LoginPage() {
           {error && <p className="text-danger text-sm">{error}</p>}
         </form>
       )}
+
+      <footer className="mt-4">
+        <button
+          type="button"
+          onClick={() => setShowPolicy(true)}
+          className="text-xs text-muted underline decoration-dotted hover:text-ink"
+        >
+          Política de privacidad
+        </button>
+      </footer>
+
+      {showPolicy && <PrivacyPolicyModal mode="readonly" onClose={() => setShowPolicy(false)} />}
     </div>
   );
 }

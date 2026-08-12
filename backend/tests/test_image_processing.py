@@ -34,7 +34,7 @@ def test_process_image_strips_gps_exif_and_normalizes_to_jpeg():
     assert piexif.load(clean_bytes)["GPS"] == {}
 
 
-def test_process_image_caps_max_dimension():
+def test_process_image_center_crops_to_square():
     img = Image.new("RGB", (3000, 1500), color=(200, 200, 200))
     buf = io.BytesIO()
     img.save(buf, format="PNG")
@@ -42,7 +42,29 @@ def test_process_image_caps_max_dimension():
     clean_bytes, _ = process_image(buf.getvalue())
 
     reopened = Image.open(io.BytesIO(clean_bytes))
-    assert max(reopened.size) <= 2000
+    assert reopened.size == (400, 400)
+
+
+def test_process_image_caps_output_at_400x400():
+    img = Image.new("RGB", (1200, 1200), color=(10, 20, 30))
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+
+    clean_bytes, _ = process_image(buf.getvalue())
+
+    reopened = Image.open(io.BytesIO(clean_bytes))
+    assert reopened.size == (400, 400)
+
+
+def test_process_image_does_not_upscale_small_square_images():
+    img = Image.new("RGB", (120, 120), color=(10, 20, 30))
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+
+    clean_bytes, _ = process_image(buf.getvalue())
+
+    reopened = Image.open(io.BytesIO(clean_bytes))
+    assert reopened.size == (120, 120)
 
 
 def test_process_image_rejects_non_image_bytes():

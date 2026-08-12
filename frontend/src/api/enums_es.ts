@@ -1,10 +1,10 @@
-import type { SexAtBirth } from "./types";
+import type { DistinguishableGender } from "./types";
 
-export const SEX_AT_BIRTH_LABELS_ES: Record<SexAtBirth, string> = {
-  male: "Masculino",
-  female: "Femenino",
-  intersex: "Intersexual",
+export const DISTINGUISHABLE_GENDER_LABELS_ES: Record<DistinguishableGender, string> = {
+  male: "Hombre",
+  female: "Mujer",
+  other: "Otro",
   prefer_not_to_say: "Prefiero no decir",
 };
 
-export const SEX_AT_BIRTH_OPTIONS: SexAtBirth[] = ["male", "female", "intersex", "prefer_not_to_say"];
+export const DISTINGUISHABLE_GENDER_OPTIONS: DistinguishableGender[] = ["male", "female", "other", "prefer_not_to_say"];

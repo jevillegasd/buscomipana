@@ -13,10 +13,6 @@ class RelativeLinkError(Exception):
     pass
 
 
-class TargetNotFound(RelativeLinkError):
-    pass
-
-
 class CannotLinkSelf(RelativeLinkError):
     pass
 
@@ -32,35 +28,81 @@ class NotAuthorizedForLink(RelativeLinkError):
 async def request_link(
     db: AsyncSession, *, requester: User, target_phone_number: str, relationship_label: RelationshipType | None
 ) -> RelativeLink:
+    """If target_phone_number has no account yet, the link is still created
+    -- "unclaimed", with target_user_id left null and target_phone_number
+    recorded instead -- so the handshake can be completed once that number
+    signs up (see resolve_open_links_for_new_user, called from auth_service on
+    every new account). Rejecting outright here would mean a user could never
+    add someone who simply hasn't installed the app yet."""
     result = await db.execute(
         select(User).where(User.phone_number == target_phone_number, User.deleted_at.is_(None))
     )
     target = result.scalar_one_or_none()
-    if target is None:
-        raise TargetNotFound(target_phone_number)
-    if target.id == requester.id:
-        raise CannotLinkSelf()
 
-    existing = await db.execute(
-        select(RelativeLink).where(
-            or_(
-                (RelativeLink.requester_user_id == requester.id) & (RelativeLink.target_user_id == target.id),
-                (RelativeLink.requester_user_id == target.id) & (RelativeLink.target_user_id == requester.id),
+    if target is not None:
+        if target.id == requester.id:
+            raise CannotLinkSelf()
+        existing = await db.execute(
+            select(RelativeLink).where(
+                or_(
+                    (RelativeLink.requester_user_id == requester.id) & (RelativeLink.target_user_id == target.id),
+                    (RelativeLink.requester_user_id == target.id) & (RelativeLink.target_user_id == requester.id),
+                )
             )
         )
-    )
-    if existing.scalar_one_or_none() is not None:
-        raise LinkAlreadyExists()
+        if existing.scalar_one_or_none() is not None:
+            raise LinkAlreadyExists()
+        link = RelativeLink(
+            requester_user_id=requester.id,
+            target_user_id=target.id,
+            relationship_label=relationship_label,
+            status=RelativeLinkStatus.pending,
+        )
+    else:
+        if target_phone_number == requester.phone_number:
+            raise CannotLinkSelf()
+        existing = await db.execute(
+            select(RelativeLink).where(
+                RelativeLink.requester_user_id == requester.id,
+                RelativeLink.target_user_id.is_(None),
+                RelativeLink.target_phone_number == target_phone_number,
+            )
+        )
+        if existing.scalar_one_or_none() is not None:
+            raise LinkAlreadyExists()
+        link = RelativeLink(
+            requester_user_id=requester.id,
+            target_phone_number=target_phone_number,
+            relationship_label=relationship_label,
+            status=RelativeLinkStatus.pending,
+        )
 
-    link = RelativeLink(
-        requester_user_id=requester.id,
-        target_user_id=target.id,
-        relationship_label=relationship_label,
-        status=RelativeLinkStatus.pending,
-    )
     db.add(link)
     await db.flush()
     return link
+
+
+async def resolve_open_links_for_new_user(db: AsyncSession, *, new_user: User) -> list[RelativeLink]:
+    """Mirror of missing_person_report_service.resolve_open_reports_for_new_user
+    for relative links: claims every unclaimed pending link whose
+    target_phone_number matches this brand-new account, so the person who
+    requested it sees a real, acceptable link instead of a dead phone-number
+    placeholder. Status stays "pending" -- the new user still has to accept it
+    themselves, same as any other request."""
+    result = await db.execute(
+        select(RelativeLink).where(
+            RelativeLink.target_user_id.is_(None),
+            RelativeLink.target_phone_number == new_user.phone_number,
+            RelativeLink.status == RelativeLinkStatus.pending,
+        )
+    )
+    links = list(result.scalars().all())
+    for link in links:
+        link.target_user_id = new_user.id
+        link.target_phone_number = None
+    if links:
+        await db.flush()
+    return links
 
 
 async def _get_link_for_user(db: AsyncSession, *, link_id: uuid.UUID, user_id: uuid.UUID) -> RelativeLink:

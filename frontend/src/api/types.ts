@@ -1,7 +1,7 @@
 export type BloodType = "A+" | "A-" | "B+" | "B-" | "AB+" | "AB-" | "O+" | "O-";
 export type PingStatus = "ok" | "distress" | "unknown";
 export type RelativeLinkStatus = "pending" | "accepted" | "declined" | "revoked";
-export type SexAtBirth = "male" | "female" | "intersex" | "prefer_not_to_say";
+export type DistinguishableGender = "male" | "female" | "other" | "prefer_not_to_say";
 
 // Wire values match the backend's RelationshipType enum (app/models/enums.py)
 // exactly -- keep in sync. Spanish display labels live in relationships.ts.
@@ -26,13 +26,14 @@ export interface UserMe {
   blood_type: BloodType | null;
   birth_date: string | null;
   national_id_number: string | null;
-  birth_place: string | null;
+  residence_place: string | null;
   nationality: string | null;
-  sex_at_birth: SexAtBirth | null;
+  distinguishable_gender: DistinguishableGender | null;
   role: "user" | "responder" | "admin";
   status: string;
   created_at: string;
   has_profile_photo: boolean;
+  needs_privacy_policy_acceptance: boolean;
 }
 
 export interface UserPublic {
@@ -40,11 +41,18 @@ export interface UserPublic {
   full_name: string | null;
   blood_type: BloodType | null;
   birth_date: string | null;
-  birth_place: string | null;
+  residence_place: string | null;
   nationality: string | null;
-  sex_at_birth: SexAtBirth | null;
+  distinguishable_gender: DistinguishableGender | null;
   national_id_number: string | null;
   has_profile_photo: boolean;
+}
+
+export interface PolicyDocument {
+  country: string;
+  version: string;
+  title: string;
+  content: string;
 }
 
 export interface OtpRequestResponse {
@@ -63,7 +71,10 @@ export interface TokenPair {
 export interface RelativeLink {
   id: string;
   requester_user_id: string;
-  target_user_id: string;
+  // Null while target_phone_number has no account yet ("unclaimed" --
+  // see backend relative_link_service.request_link).
+  target_user_id: string | null;
+  target_phone_number: string | null;
   relationship_label: RelationshipType | null;
   status: RelativeLinkStatus;
   requested_at: string;

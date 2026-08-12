@@ -30,9 +30,9 @@ async def test_profile_fields_roundtrip(client):
             "full_name": "Camila Torres",
             "national_id_number": "1020304050",
             "birth_date": "1994-03-12",
-            "birth_place": "Bogotá, Colombia",
+            "residence_place": "Bogotá, Colombia",
             "nationality": "Colombiana",
-            "sex_at_birth": "female",
+            "distinguishable_gender": "female",
         },
         headers=auth_headers(a),
     )
@@ -40,9 +40,9 @@ async def test_profile_fields_roundtrip(client):
     body = resp.json()
     assert body["national_id_number"] == "1020304050"
     assert body["birth_date"] == "1994-03-12"
-    assert body["birth_place"] == "Bogotá, Colombia"
+    assert body["residence_place"] == "Bogotá, Colombia"
     assert body["nationality"] == "Colombiana"
-    assert body["sex_at_birth"] == "female"
+    assert body["distinguishable_gender"] == "female"
     assert body["has_profile_photo"] is False
 
 

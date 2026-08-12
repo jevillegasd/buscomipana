@@ -142,6 +142,22 @@ async def test_remembered_device_does_not_skip_otp_for_a_different_number(client
 
 
 @pytest.mark.asyncio
+async def test_otp_request_rejects_unsupported_country(client):
+    # Only Colombia (+57) and the UAE (+971) are supported right now -- any
+    # other calling code should be rejected before an OTP is ever sent.
+    resp = await client.post("/api/v1/auth/otp/request", json={"phone_number": "+14155552671"})
+    assert resp.status_code == 422, resp.text
+    assert get_last_sent_message("+14155552671") is None
+
+
+@pytest.mark.asyncio
+async def test_otp_request_allows_uae_numbers(client):
+    phone = "+971501234567"
+    resp = await client.post("/api/v1/auth/otp/request", json={"phone_number": phone})
+    assert resp.status_code == 202, resp.text
+
+
+@pytest.mark.asyncio
 async def test_logout_all_revokes_remembered_device_too(client, monkeypatch):
     # Calls otp/request twice for the same number (once up front, once at the
     # end to confirm it's no longer skipped) -- disable the unrelated resend

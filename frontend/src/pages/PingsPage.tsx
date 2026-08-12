@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { api } from "../api/client";
 import { AlertTriangleIcon, CheckCircleIcon, UsersIcon } from "../components/icons";
+import { googleMapsUrl } from "../utils/maps";
 import { formatRelativeTime } from "../utils/time";
 import type { Ping, PingStatus, RelativeLink, UserMe, UserPublic } from "../api/types";
 
@@ -67,7 +68,14 @@ function PingHistoryItem({ ping }: { ping: Ping }) {
       </p>
       {ping.latitude != null && ping.longitude != null && (
         <p className="text-xs text-muted">
-          {ping.latitude.toFixed(4)}, {ping.longitude.toFixed(4)}
+          <a
+            href={googleMapsUrl(ping.latitude, ping.longitude)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-brand hover:underline"
+          >
+            {ping.latitude.toFixed(4)}, {ping.longitude.toFixed(4)}
+          </a>
         </p>
       )}
       {ping.message && <p className="text-xs text-ink italic">&ldquo;{ping.message}&rdquo;</p>}
@@ -128,7 +136,11 @@ function RelativePicker({
   return (
     <div className="flex flex-col gap-2">
       {links.map((link) => {
+        // Accepted links always have a claimed target_user_id -- only an
+        // unclaimed (not-yet-registered) link can have it null, and those
+        // can't reach "accepted" status yet. Guard anyway for the type.
         const otherId = link.requester_user_id === me.id ? link.target_user_id : link.requester_user_id;
+        if (!otherId) return null;
         return <RelativePickOption key={link.id} userId={otherId} onPick={onPick} />;
       })}
       <button type="button" onClick={onCancel} className="text-sm text-muted underline self-start">

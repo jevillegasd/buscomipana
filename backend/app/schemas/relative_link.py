@@ -17,7 +17,11 @@ class RelativeLinkOut(BaseModel):
 
     id: uuid.UUID
     requester_user_id: uuid.UUID
-    target_user_id: uuid.UUID
+    # Null while the target phone number has no account yet -- see
+    # target_phone_number, populated only in that same "unclaimed" window
+    # (relative_link_service.request_link / resolve_open_links_for_new_user).
+    target_user_id: uuid.UUID | None
+    target_phone_number: str | None = None
     relationship_label: RelationshipType | None
     status: RelativeLinkStatus
     requested_at: datetime

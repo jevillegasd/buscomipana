@@ -19,7 +19,7 @@ from app.deps import get_current_user
 from app.models.user import User
 from app.schemas.ping import PingOut
 from app.schemas.user import UserMeOut, UserPublicOut, UserUpdateIn
-from app.services import media_asset_service, ping_service
+from app.services import media_asset_service, ping_service, policy_service
 from app.services.visibility_service import can_view_location
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -27,8 +27,12 @@ router = APIRouter(prefix="/users", tags=["users"])
 
 async def _build_user_me_out(db: AsyncSession, user: User) -> UserMeOut:
     asset = await media_asset_service.get_profile_photo_asset(db, user_id=user.id)
+    needs_policy_acceptance = await policy_service.needs_acceptance(db, user=user)
     return UserMeOut.model_validate(user).model_copy(
-        update={"has_profile_photo": asset is not None}
+        update={
+            "has_profile_photo": asset is not None,
+            "needs_privacy_policy_acceptance": needs_policy_acceptance,
+        }
     )
 
 

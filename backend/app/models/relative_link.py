@@ -23,14 +23,26 @@ from app.models.types import str_enum
 
 
 class RelativeLink(UUIDPrimaryKeyMixin, Base):
+    """target_user_id is nullable to support linking a phone number that has
+    no account yet -- request_link() stores target_phone_number instead in
+    that case, and resolve_open_links_for_new_user() fills in target_user_id
+    (clearing target_phone_number) the moment that number signs up, the same
+    "unclaimed" pattern missing_person_report_service uses for reports filed
+    against a not-yet-registered phone number."""
+
     __tablename__ = "relative_links"
     __table_args__ = (
         UniqueConstraint("requester_user_id", "target_user_id", name="uq_relative_link_pair"),
         CheckConstraint("requester_user_id <> target_user_id", name="ck_relative_link_no_self"),
+        CheckConstraint(
+            "target_user_id IS NOT NULL OR target_phone_number IS NOT NULL",
+            name="ck_relative_link_target_present",
+        ),
     )
 
     requester_user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-    target_user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    target_user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
+    target_phone_number: Mapped[str | None] = mapped_column(String(32))
     relationship_label: Mapped[RelationshipType | None] = mapped_column(str_enum(RelationshipType, 20))
     status: Mapped[RelativeLinkStatus] = mapped_column(
         str_enum(RelativeLinkStatus, 20),

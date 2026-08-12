@@ -19,7 +19,18 @@
       "Bash(echo \"EXIT_CODE:$?\")",
       "Bash(curl -s \"http://localhost:8000/api/v1/_debug/last-otp?phone=%2B573009990002\")",
       "Bash(\"../.venv/Scripts/python.exe\" -m ruff check app tests --fix)",
-      "Bash(npm audit *)"
+      "Bash(npm audit *)",
+      "Bash(dig +short b652187f-da3c-4f3a-99e7-a030fe45f7a4.cfargotunnel.com)",
+      "Bash(dig +short www.buscomipana.com)",
+      "Bash(curl -sS -D - -o /dev/null --max-time 10 https://buscomipana.com/)",
+      "Bash(curl -sS -D - -o /dev/null --max-time 10 https://www.buscomipana.com/)",
+      "Bash(curl -sS --max-time 10 https://buscomipana.com/)",
+      "Bash(../.venv/Scripts/python.exe -m pytest -q)",
+      "Bash(../.venv/Scripts/ruff.exe check *)",
+      "Bash(curl -s \"http://localhost:8000/api/v1/_debug/last-otp?phone=%2B573005551111\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:5173/)",
+      "Bash(curl -s -o /dev/null -w \"frontend: %{http_code}\\\\n\" http://localhost:5173/)",
+      "Bash(curl -s -o /dev/null -w \"backend: %{http_code}\\\\n\" http://localhost:8000/health)"
     ]
   }
 }
