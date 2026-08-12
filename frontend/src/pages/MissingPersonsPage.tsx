@@ -1,8 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { api, ApiError } from "../api/client";
+import { DEFAULT_COUNTRY } from "../api/countries";
 import { RELATIONSHIP_LABELS_ES, RELATIONSHIP_OPTIONS } from "../api/relationships";
 import ImageCropModal from "../components/ImageCropModal";
+import PhoneNumberInput from "../components/PhoneNumberInput";
 import { useAuthenticatedImage } from "../hooks/useAuthenticatedImage";
 import type { MissingPersonMatchCandidate, MissingPersonReport, RelationshipType } from "../api/types";
 
@@ -161,7 +163,7 @@ export default function MissingPersonsPage() {
   });
 
   const [name, setName] = useState("");
-  const [phone, setPhone] = useState("+57");
+  const [phone, setPhone] = useState(`+${DEFAULT_COUNTRY.callingCode}`);
   const [relationship, setRelationship] = useState<RelationshipType | "">("");
   const [missingSince, setMissingSince] = useState("");
   const [missingLocation, setMissingLocation] = useState("");
@@ -183,7 +185,7 @@ export default function MissingPersonsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["missing-reports"] });
       setName("");
-      setPhone("+57");
+      setPhone(`+${DEFAULT_COUNTRY.callingCode}`);
       setRelationship("");
       setMissingSince("");
       setMissingLocation("");
@@ -224,17 +226,7 @@ export default function MissingPersonsPage() {
           placeholder="Nombre completo"
           className="rounded-md bg-card border border-card px-3 py-2 text-ink"
         />
-        <input
-          required
-          value={phone}
-          onChange={(e) => {
-            setPhone(e.target.value);
-            e.target.setCustomValidity("");
-          }}
-          onInvalid={(e) => e.currentTarget.setCustomValidity("Ingresa un número de teléfono.")}
-          placeholder="+573001234567"
-          className="rounded-md bg-card border border-card px-3 py-2 text-ink"
-        />
+        <PhoneNumberInput value={phone} onChange={setPhone} required />
         <select
           value={relationship}
           onChange={(e) => setRelationship(e.target.value as RelationshipType)}

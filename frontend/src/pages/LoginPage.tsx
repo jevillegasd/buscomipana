@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, ApiError, markLoggedIn } from "../api/client";
+import { DEFAULT_COUNTRY } from "../api/countries";
+import PhoneNumberInput from "../components/PhoneNumberInput";
 import PrivacyPolicyModal from "../components/PrivacyPolicyModal";
 import type { OtpRequestResponse, TokenPair } from "../api/types";
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const [phoneNumber, setPhoneNumber] = useState("+57");
+  const [phoneNumber, setPhoneNumber] = useState(`+${DEFAULT_COUNTRY.callingCode}`);
   const [code, setCode] = useState("");
   const [step, setStep] = useState<"phone" | "code">("phone");
   const [error, setError] = useState<string | null>(null);
@@ -78,35 +80,7 @@ export default function LoginPage() {
         <form onSubmit={requestCode} className="w-full max-w-xs flex flex-col gap-3">
           <label className="text-sm text-muted">
             Número de teléfono
-            <input
-              type="tel"
-              required
-              // Matches the backend's E.164 validator (schemas/common.py) so an
-              // incomplete number -- e.g. the "+57" prefix left untouched --
-              // is rejected client-side instead of round-tripping a 422.
-              pattern="^\+[1-9]\d{7,14}$"
-              title="Número completo en formato E.164, ej. +573001234567"
-              value={phoneNumber}
-              onChange={(e) => {
-                setPhoneNumber(e.target.value);
-                e.target.setCustomValidity("");
-              }}
-              onInvalid={(e) => {
-                // Browsers prefix the `title` text with their own validation
-                // string ("Please fill out this field" / "Please match the
-                // requested format") in the browser's UI language, not the
-                // page's -- setCustomValidity fully replaces that tooltip
-                // text so it's Spanish end to end regardless of browser locale.
-                const input = e.currentTarget;
-                input.setCustomValidity(
-                  input.validity.valueMissing
-                    ? "Ingresa tu número de teléfono."
-                    : "Número completo en formato E.164, ej. +573001234567",
-                );
-              }}
-              placeholder="+573001234567"
-              className="mt-1 w-full rounded-md bg-card border border-card px-3 py-2 text-ink"
-            />
+            <PhoneNumberInput value={phoneNumber} onChange={setPhoneNumber} required />
           </label>
           <button
             type="submit"

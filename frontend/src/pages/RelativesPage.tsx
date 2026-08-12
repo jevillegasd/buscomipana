@@ -1,8 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { api, ApiError } from "../api/client";
+import { DEFAULT_COUNTRY } from "../api/countries";
 import { RELATIONSHIP_LABELS_ES, RELATIONSHIP_OPTIONS } from "../api/relationships";
 import { AlertTriangleIcon, CheckCircleIcon, HandshakeIcon } from "../components/icons";
+import PhoneNumberInput from "../components/PhoneNumberInput";
 import { useAuthenticatedImage } from "../hooks/useAuthenticatedImage";
 import { googleMapsUrl } from "../utils/maps";
 import { formatRelativeTime } from "../utils/time";
@@ -162,7 +164,7 @@ export default function RelativesPage() {
     queryFn: () => api.get<RelativeLink[]>("/relative-links"),
   });
 
-  const [phone, setPhone] = useState("+57");
+  const [phone, setPhone] = useState(`+${DEFAULT_COUNTRY.callingCode}`);
   const [relationship, setRelationship] = useState<RelationshipType | "">("");
   const [error, setError] = useState<string | null>(null);
 
@@ -174,7 +176,7 @@ export default function RelativesPage() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["relative-links"] });
-      setPhone("+57");
+      setPhone(`+${DEFAULT_COUNTRY.callingCode}`);
       setRelationship("");
       setError(null);
     },
@@ -197,12 +199,7 @@ export default function RelativesPage() {
         className="flex flex-col gap-2 border border-card rounded-md p-3"
       >
         <p className="text-sm font-medium text-ink">Vincular a un pana por número de teléfono</p>
-        <input
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          placeholder="+573001234567"
-          className="rounded-md bg-card border border-card px-3 py-2 text-ink"
-        />
+        <PhoneNumberInput value={phone} onChange={setPhone} required />
         <select
           value={relationship}
           onChange={(e) => setRelationship(e.target.value as RelationshipType)}
