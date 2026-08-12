@@ -1,15 +1,26 @@
+import { useQuery } from "@tanstack/react-query";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
-import { isLoggedIn } from "./api/client";
+import { api, isLoggedIn } from "./api/client";
 import NavBar from "./components/NavBar";
 import OfflineBanner from "./components/OfflineBanner";
+import PrivacyPolicyModal from "./components/PrivacyPolicyModal";
 import LoginPage from "./pages/LoginPage";
 import PingsPage from "./pages/PingsPage";
 import ProfilePage from "./pages/ProfilePage";
 import RelativesPage from "./pages/RelativesPage";
 import MissingPersonsPage from "./pages/MissingPersonsPage";
+import type { UserMe } from "./api/types";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   if (!isLoggedIn()) return <Navigate to="/login" replace />;
+
+  // Shares the ["me"] query cache with every page that already fetches
+  // /users/me, so this doesn't add an extra request beyond the first login.
+  const { data: me } = useQuery({ queryKey: ["me"], queryFn: () => api.get<UserMe>("/users/me") });
+  if (me?.needs_privacy_policy_acceptance) {
+    return <PrivacyPolicyModal mode="accept" />;
+  }
+
   return <>{children}</>;
 }
 

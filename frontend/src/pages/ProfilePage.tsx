@@ -1,9 +1,10 @@
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useState, useEffect, useRef } from "react";
 import { api, ApiError } from "../api/client";
-import { SEX_AT_BIRTH_LABELS_ES, SEX_AT_BIRTH_OPTIONS } from "../api/enums_es";
+import { DISTINGUISHABLE_GENDER_LABELS_ES, DISTINGUISHABLE_GENDER_OPTIONS } from "../api/enums_es";
+import ImageCropModal from "../components/ImageCropModal";
 import { useAuthenticatedImage } from "../hooks/useAuthenticatedImage";
-import type { BloodType, SexAtBirth, UserMe } from "../api/types";
+import type { BloodType, DistinguishableGender, UserMe } from "../api/types";
 
 const BLOOD_TYPES: BloodType[] = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
 
@@ -11,6 +12,7 @@ function ProfilePhoto({ user }: { user: UserMe }) {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
   const photoUrl = useAuthenticatedImage(user.has_profile_photo ? `/users/${user.id}/profile-photo` : null);
 
   const upload = useMutation({
@@ -25,6 +27,11 @@ function ProfilePhoto({ user }: { user: UserMe }) {
     },
     onError: (err) => setError(err instanceof ApiError ? err.message : "No se pudo subir la foto"),
   });
+
+  function handleCropped(blob: Blob) {
+    setPendingFile(null);
+    upload.mutate(new File([blob], "profile.jpg", { type: "image/jpeg" }));
+  }
 
   const remove = useMutation({
     mutationFn: () => api.del("/users/me/profile-photo"),
@@ -48,7 +55,7 @@ function ProfilePhoto({ user }: { user: UserMe }) {
           className="hidden"
           onChange={(e) => {
             const file = e.target.files?.[0];
-            if (file) upload.mutate(file);
+            if (file) setPendingFile(file);
             e.target.value = "";
           }}
         />
@@ -71,6 +78,9 @@ function ProfilePhoto({ user }: { user: UserMe }) {
         )}
         {error && <p className="text-danger text-xs">{error}</p>}
       </div>
+      {pendingFile && (
+        <ImageCropModal file={pendingFile} onCancel={() => setPendingFile(null)} onCropped={handleCropped} />
+      )}
     </div>
   );
 }
@@ -83,9 +93,9 @@ export default function ProfilePage() {
   const [bloodType, setBloodType] = useState<BloodType | "">("");
   const [birthDate, setBirthDate] = useState("");
   const [nationalIdNumber, setNationalIdNumber] = useState("");
-  const [birthPlace, setBirthPlace] = useState("");
+  const [residencePlace, setResidencePlace] = useState("");
   const [nationality, setNationality] = useState("");
-  const [sexAtBirth, setSexAtBirth] = useState<SexAtBirth | "">("");
+  const [distinguishableGender, setDistinguishableGender] = useState<DistinguishableGender | "">("");
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
@@ -94,9 +104,9 @@ export default function ProfilePage() {
       setBloodType(user.blood_type ?? "");
       setBirthDate(user.birth_date ?? "");
       setNationalIdNumber(user.national_id_number ?? "");
-      setBirthPlace(user.birth_place ?? "");
+      setResidencePlace(user.residence_place ?? "");
       setNationality(user.nationality ?? "");
-      setSexAtBirth(user.sex_at_birth ?? "");
+      setDistinguishableGender(user.distinguishable_gender ?? "");
     }
   }, [user]);
 
@@ -107,9 +117,9 @@ export default function ProfilePage() {
         blood_type: bloodType || null,
         birth_date: birthDate || null,
         national_id_number: nationalIdNumber || null,
-        birth_place: birthPlace || null,
+        residence_place: residencePlace || null,
         nationality: nationality || null,
-        sex_at_birth: sexAtBirth || null,
+        distinguishable_gender: distinguishableGender || null,
       }),
     onSuccess: (updated) => {
       queryClient.setQueryData(["me"], updated);
@@ -170,27 +180,30 @@ export default function ProfilePage() {
         </label>
 
         <label className="text-sm text-muted">
-          Sexo al nacer
+          Género distinguible
           <select
-            value={sexAtBirth}
-            onChange={(e) => setSexAtBirth(e.target.value as SexAtBirth)}
+            value={distinguishableGender}
+            onChange={(e) => setDistinguishableGender(e.target.value as DistinguishableGender)}
             className="mt-1 w-full rounded-md bg-card border border-card px-3 py-2 text-ink"
           >
             <option value="">Prefiero no especificar</option>
-            {SEX_AT_BIRTH_OPTIONS.map((s) => (
+            {DISTINGUISHABLE_GENDER_OPTIONS.map((s) => (
               <option key={s} value={s}>
-                {SEX_AT_BIRTH_LABELS_ES[s]}
+                {DISTINGUISHABLE_GENDER_LABELS_ES[s]}
               </option>
             ))}
           </select>
+          <span className="block mt-1 text-xs text-muted">
+            Cómo te ves para que un rescatista pueda reconocerte, no un dato legal.
+          </span>
         </label>
 
         <label className="text-sm text-muted">
-          Lugar de nacimiento
+          Lugar de residencia
           <input
-            value={birthPlace}
-            onChange={(e) => setBirthPlace(e.target.value)}
-            placeholder="Ciudad, país"
+            value={residencePlace}
+            onChange={(e) => setResidencePlace(e.target.value)}
+            placeholder="Ciudad, país donde vives actualmente"
             className="mt-1 w-full rounded-md bg-card border border-card px-3 py-2 text-ink"
           />
         </label>

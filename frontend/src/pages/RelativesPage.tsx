@@ -4,6 +4,7 @@ import { api, ApiError } from "../api/client";
 import { RELATIONSHIP_LABELS_ES, RELATIONSHIP_OPTIONS } from "../api/relationships";
 import { AlertTriangleIcon, CheckCircleIcon, HandshakeIcon } from "../components/icons";
 import { useAuthenticatedImage } from "../hooks/useAuthenticatedImage";
+import { googleMapsUrl } from "../utils/maps";
 import { formatRelativeTime } from "../utils/time";
 import type { Ping, RelationshipType, RelativeLink, RelativeLinkStatus, UserMe, UserPublic } from "../api/types";
 
@@ -22,12 +23,21 @@ const PING_STATUS_LABELS_ES: Record<string, string> = {
 
 function RelativeRow({ link, meId }: { link: RelativeLink; meId: string }) {
   const queryClient = useQueryClient();
-  const otherUserId = link.requester_user_id === meId ? link.target_user_id : link.requester_user_id;
+  // Unclaimed link (target_user_id null, see api/types.ts): the requester is
+  // always "me" here, since a not-yet-registered phone number can't be the
+  // one who sent the request.
+  const isUnclaimed = link.target_user_id === null;
+  const otherUserId = isUnclaimed
+    ? null
+    : link.requester_user_id === meId
+      ? link.target_user_id
+      : link.requester_user_id;
   const iAmTarget = link.target_user_id === meId;
 
   const { data: otherUser } = useQuery({
     queryKey: ["user", otherUserId],
     queryFn: () => api.get<UserPublic>(`/users/${otherUserId}`),
+    enabled: otherUserId !== null,
   });
   const photoUrl = useAuthenticatedImage(
     otherUser?.has_profile_photo ? `/users/${otherUserId}/profile-photo` : null,
@@ -51,7 +61,9 @@ function RelativeRow({ link, meId }: { link: RelativeLink; meId: string }) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["relative-links"] }),
   });
 
-  const displayName = otherUser?.full_name || "(sin nombre)";
+  const displayName = isUnclaimed
+    ? link.target_phone_number ?? "(número desconocido)"
+    : otherUser?.full_name || "(sin nombre)";
 
   return (
     <li className="rounded-md border border-card bg-card/50 p-3 flex flex-col gap-1">
@@ -78,7 +90,19 @@ function RelativeRow({ link, meId }: { link: RelativeLink; meId: string }) {
             <CheckCircleIcon className="w-3.5 h-3.5 text-safe" />
           )}
           Estado: {PING_STATUS_LABELS_ES[latest.status]} · {formatRelativeTime(latest.created_at)}
-          {latest.latitude != null && ` · ${latest.latitude.toFixed(3)}, ${latest.longitude!.toFixed(3)}`}
+          {latest.latitude != null && (
+            <>
+              {" · "}
+              <a
+                href={googleMapsUrl(latest.latitude, latest.longitude!)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-brand hover:underline"
+              >
+                {latest.latitude.toFixed(3)}, {latest.longitude!.toFixed(3)}
+              </a>
+            </>
+          )}
         </p>
       )}
 
@@ -104,7 +128,19 @@ function RelativeRow({ link, meId }: { link: RelativeLink; meId: string }) {
         </div>
       )}
       {link.status === "pending" && !iAmTarget && (
-        <p className="text-xs text-muted">Esperando que acepten...</p>
+        <div className="flex flex-col gap-1 mt-1">
+          <p className="text-xs text-muted">
+            {isUnclaimed
+              ? "Este número aún no está en BuscoMiPana. Se vinculará automáticamente cuando se registre."
+              : "Esperando que acepten..."}
+          </p>
+          <button
+            onClick={() => revoke.mutate()}
+            className="text-xs text-danger hover:text-danger/80 self-start"
+          >
+            Cancelar solicitud
+          </button>
+        </div>
       )}
       {link.status === "accepted" && (
         <button

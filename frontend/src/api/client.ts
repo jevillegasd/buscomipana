@@ -57,6 +57,15 @@ async function request<T>(path: string, options: RequestInit = {}, retry = true)
   if (!response.ok) {
     const body = await response.json().catch(() => ({ detail: response.statusText }));
     const detail = body.detail;
+    // FastAPI's own request-validation errors (422s from a malformed body --
+    // not our HTTPException(detail=...) calls) put an *array* of
+    // {loc, msg, type} objects in `detail`, which also satisfies
+    // `typeof === "object"` and would otherwise silently fall through to the
+    // generic "Request failed" below.
+    if (Array.isArray(detail)) {
+      const message = detail.map((e) => e?.msg).filter(Boolean).join(" ");
+      throw new ApiError(response.status, message || "Solicitud inválida");
+    }
     if (detail && typeof detail === "object") {
       throw new ApiError(response.status, detail.message || "Request failed", detail.retry_after_seconds);
     }

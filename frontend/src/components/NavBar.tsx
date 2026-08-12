@@ -17,7 +17,7 @@ export default function NavBar() {
   }
 
   return (
-    <nav className="flex items-center justify-between px-4 py-3 border-b border-card">
+    <nav className="sticky top-0 z-20 flex items-center justify-between px-4 py-3 bg-night border-b border-card">
       <div className="flex gap-1">
         <NavLink to="/" className={linkClass} end>
           Estado

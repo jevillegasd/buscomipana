@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { api, ApiError } from "../api/client";
 import { RELATIONSHIP_LABELS_ES, RELATIONSHIP_OPTIONS } from "../api/relationships";
+import ImageCropModal from "../components/ImageCropModal";
 import { useAuthenticatedImage } from "../hooks/useAuthenticatedImage";
 import type { MissingPersonMatchCandidate, MissingPersonReport, RelationshipType } from "../api/types";
 
@@ -59,6 +60,7 @@ function ReportPhotoSection({ report }: { report: MissingPersonReport }) {
   const photoUrl = useAuthenticatedImage(report.has_photo ? `/missing-person-reports/${report.id}/photo` : null);
 
   const [file, setFile] = useState<File | null>(null);
+  const [pendingCropFile, setPendingCropFile] = useState<File | null>(null);
   const [consentPublic, setConsentPublic] = useState(false);
   const [consentAi, setConsentAi] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -101,9 +103,14 @@ function ReportPhotoSection({ report }: { report: MissingPersonReport }) {
       <input
         type="file"
         accept="image/jpeg,image/png,image/webp"
-        onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+        onChange={(e) => {
+          const picked = e.target.files?.[0];
+          if (picked) setPendingCropFile(picked);
+          e.target.value = "";
+        }}
         className="text-xs text-muted"
       />
+      {file && <p className="text-xs text-safe">Imagen recortada lista para subir.</p>}
       <label className="flex items-start gap-2 text-xs text-muted">
         <input
           type="checkbox"
@@ -132,6 +139,16 @@ function ReportPhotoSection({ report }: { report: MissingPersonReport }) {
         {upload.isPending ? "Subiendo..." : "Subir foto"}
       </button>
       {error && <p className="text-danger text-xs">{error}</p>}
+      {pendingCropFile && (
+        <ImageCropModal
+          file={pendingCropFile}
+          onCancel={() => setPendingCropFile(null)}
+          onCropped={(blob) => {
+            setPendingCropFile(null);
+            setFile(new File([blob], "reporte.jpg", { type: "image/jpeg" }));
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -180,6 +197,10 @@ export default function MissingPersonsPage() {
   return (
     <div className="flex flex-col gap-4">
       <h1 className="text-2xl font-bold text-ink">Reportar un pana desaparecido o en pie</h1>
+      <p className="rounded-md border border-pending/30 bg-pending/10 text-pending text-xs px-3 py-2">
+        BuscoMiPana no es un registro de personas desaparecidas. La información aquí referenciada es visible
+        solo a personas con vínculos confirmados.
+      </p>
       <p className="text-sm text-muted">
         Cruzamos el número de teléfono con las cuentas registradas, incluyendo coincidencias cercanas por
         dígitos mal escritos o nombres similares.

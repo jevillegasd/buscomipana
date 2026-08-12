@@ -3,7 +3,10 @@ import io
 from PIL import Image, UnidentifiedImageError
 
 ALLOWED_INPUT_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
-MAX_DIMENSION_PX = 2000
+# Sanity cap applied before cropping, purely to bound how much Pillow decodes
+# -- the real output size limit is OUTPUT_SIZE_PX below.
+DECODE_GUARD_DIMENSION_PX = 2000
+OUTPUT_SIZE_PX = 400
 OUTPUT_CONTENT_TYPE = "image/jpeg"
 
 
@@ -13,7 +16,13 @@ class InvalidImageError(Exception):
 
 def process_image(raw_bytes: bytes) -> tuple[bytes, str]:
     """Validates the upload is really a decodable image, strips all metadata,
-    and normalizes to a capped-size JPEG.
+    center-crops to a square, and downsizes to a capped square JPEG.
+
+    Every caller (profile photo, missing-person report photo) is displayed as
+    a square/circular thumbnail, so cropping here -- rather than trusting
+    every caller to send a pre-cropped square -- guarantees the stored file
+    always matches, even for direct API callers that bypass the frontend's
+    interactive crop picker.
 
     Stripping metadata matters specifically for this app: JPEG/EXIF commonly
     embeds GPS coordinates from the phone that took the photo, which would
@@ -33,13 +42,22 @@ def process_image(raw_bytes: bytes) -> tuple[bytes, str]:
 
     # verify() leaves the file object unusable for further decoding -- reopen.
     image = Image.open(io.BytesIO(raw_bytes)).convert("RGB")
-    if max(image.size) > MAX_DIMENSION_PX:
-        image.thumbnail((MAX_DIMENSION_PX, MAX_DIMENSION_PX))
+    if max(image.size) > DECODE_GUARD_DIMENSION_PX:
+        image.thumbnail((DECODE_GUARD_DIMENSION_PX, DECODE_GUARD_DIMENSION_PX))
+
+    width, height = image.size
+    side = min(width, height)
+    left = (width - side) // 2
+    top = (height - side) // 2
+    image = image.crop((left, top, left + side, top + side))
+
+    if side > OUTPUT_SIZE_PX:
+        image = image.resize((OUTPUT_SIZE_PX, OUTPUT_SIZE_PX), Image.LANCZOS)
 
     # Rebuild from raw pixel data into a brand-new Image with no .info dict at
-    # all, rather than trusting convert()/thumbnail() to have dropped every
-    # metadata field -- this is the step that actually guarantees no EXIF
-    # (and no embedded GPS tag) survives into the stored file.
+    # all, rather than trusting convert()/crop()/resize() to have dropped
+    # every metadata field -- this is the step that actually guarantees no
+    # EXIF (and no embedded GPS tag) survives into the stored file.
     clean = Image.frombytes(image.mode, image.size, image.tobytes())
 
     output = io.BytesIO()

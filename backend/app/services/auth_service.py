@@ -5,6 +5,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
+from app.core.countries import is_allowed_phone_number
 from app.core.security import (
     create_access_token,
     ensure_aware,
@@ -25,7 +26,12 @@ from app.models.otp import (
     TrustedDevice,
 )
 from app.models.user import User
-from app.services import missing_person_report_service, ping_service, sms_outbox_service
+from app.services import (
+    missing_person_report_service,
+    ping_service,
+    relative_link_service,
+    sms_outbox_service,
+)
 
 settings = get_settings()
 
@@ -43,6 +49,10 @@ class TooManyOtpAttempts(OtpError):
 
 
 class PhoneNumberTaken(OtpError):
+    pass
+
+
+class UnsupportedCountry(OtpError):
     pass
 
 
@@ -95,6 +105,11 @@ async def _create_and_send_otp(
 
 
 async def request_login_otp(db: AsyncSession, phone_number: str) -> OtpVerification:
+    # Checked before sending anything -- an unsupported-country number should
+    # never cost SMS spend, and shouldn't be able to probe whether an account
+    # exists there either.
+    if not is_allowed_phone_number(phone_number):
+        raise UnsupportedCountry(phone_number)
     return await _create_and_send_otp(
         db, phone_number=phone_number, purpose=OtpPurpose.signup_or_login, user_id=None
     )
@@ -180,6 +195,11 @@ async def verify_login_otp(db: AsyncSession, *, phone_number: str, code: str) ->
         # number *before* this person ever had an account ("unclaimed" subject).
         # Resolve and notify those reporters now that the account exists.
         await missing_person_report_service.resolve_open_reports_for_new_user(db, new_user=user)
+
+        # Same "unclaimed" pattern for relative-link requests filed against
+        # this phone number before it ever had an account -- see
+        # relative_link_service.request_link.
+        await relative_link_service.resolve_open_links_for_new_user(db, new_user=user)
     else:
         user.last_login_at = datetime.now(UTC)
 

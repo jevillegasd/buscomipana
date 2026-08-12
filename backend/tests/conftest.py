@@ -14,6 +14,7 @@ from app.models.missing_person_report import (
 )
 from app.models.otp import AuthSession, OtpVerification, TrustedDevice
 from app.models.ping import Ping, Pong
+from app.models.policy_acceptance import PolicyAcceptance
 from app.models.relative_link import RelativeLink, ResponderCredential
 from app.models.sms import InboundSmsMessage, SmsOutboxEntry
 from app.models.user import User
@@ -35,6 +36,7 @@ UNIT_TEST_TABLES = [
     InboundSmsMessage.__table__,
     PingAnalyticsEvent.__table__,
     MediaAsset.__table__,
+    PolicyAcceptance.__table__,
 ]
 
 

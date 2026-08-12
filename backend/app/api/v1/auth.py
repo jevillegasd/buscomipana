@@ -79,6 +79,12 @@ async def request_otp(request: Request, body: OtpRequestIn, response: Response, 
 
     try:
         await auth_service.request_login_otp(db, phone_number=body.phone_number)
+    except auth_service.UnsupportedCountry:
+        await db.rollback()
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "Por ahora BuscoMiPana solo está disponible en Colombia y Emiratos Árabes Unidos.",
+        )
     except auth_service.OtpCooldownActive as exc:
         await db.rollback()
         raise HTTPException(

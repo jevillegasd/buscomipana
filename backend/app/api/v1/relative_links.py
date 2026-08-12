@@ -27,9 +27,6 @@ async def create_relative_link(
             db, requester=user, target_phone_number=body.target_phone_number,
             relationship_label=body.relationship_label,
         )
-    except relative_link_service.TargetNotFound:
-        await db.rollback()
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "No account found for that phone number")
     except relative_link_service.CannotLinkSelf:
         await db.rollback()
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cannot create a relative link to yourself")
