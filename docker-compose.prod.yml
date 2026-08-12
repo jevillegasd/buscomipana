@@ -1,0 +1,147 @@
+# Production stack: microsegmented into three Docker networks so a
+# compromised service only ever has network access to what it actually
+# needs (Zero Trust / least-privilege, enforced at the network layer, not
+# just application auth):
+#
+#   edge  -- cloudflared <-> caddy. Nothing else touches this network.
+#   app   -- caddy <-> backend, caddy <-> frontend. The reverse proxy's tier.
+#   data  -- backend/celery <-> postgres/redis. Unreachable from edge or app;
+#            postgres/redis publish no host ports at all, so they're also
+#            unreachable from outside the Docker host entirely.
+#
+# See DEPLOYMENT.md for first-time setup (secrets, Cloudflare Tunnel, running
+# migrations) -- this file alone won't boot a working stack.
+name: buscomipana
+
+networks:
+  edge:
+  app:
+  data:
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    networks: [data]
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    networks: [data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+    env_file: .env.production
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379/0
+      MEDIA_LOCAL_PATH: /app/media
+    networks: [app, data]
+    volumes:
+      - media_data:/app/media
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    # No ports: mapping -- only reachable through Caddy, over the `app`
+    # network. The image's own CMD (Dockerfile) is already the production
+    # uvicorn invocation, no --reload, so no command override is needed here.
+
+  celery-worker:
+    build:
+      context: ./backend
+    env_file: .env.production
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379/0
+      MEDIA_LOCAL_PATH: /app/media
+    networks: [data]
+    volumes:
+      - media_data:/app/media
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: celery -A app.workers.celery_app worker --loglevel=info
+    restart: unless-stopped
+
+  celery-beat:
+    build:
+      context: ./backend
+    env_file: .env.production
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379/0
+    networks: [data]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: celery -A app.workers.celery_app beat --loglevel=info
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      target: runtime
+    networks: [app]
+    restart: unless-stopped
+    # No ports: mapping -- only reachable through Caddy, over the `app` network.
+
+  caddy:
+    image: caddy:2-alpine
+    networks: [edge, app]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      PUBLIC_DOMAIN: ${PUBLIC_DOMAIN}
+    depends_on: [backend, frontend]
+    restart: unless-stopped
+    # Intentionally no ports: mapping -- cloudflared is the sole ingress path
+    # (see below), so nothing needs to be published to the host at all. If
+    # you decide against Cloudflare Tunnel later, delete the cloudflared
+    # service and uncomment this instead:
+    # ports:
+    #   - "80:80"
+    #   - "443:443"
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: tunnel run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
+    networks: [edge]
+    depends_on: [caddy]
+    restart: unless-stopped
+    # Makes an outbound-only connection to Cloudflare's edge -- no inbound
+    # port is ever opened on this host, for this service or any other. See
+    # DEPLOYMENT.md for how to create the tunnel and get TUNNEL_TOKEN.
+
+volumes:
+  postgres_data:
+  media_data:
+  caddy_data:
+  caddy_config:

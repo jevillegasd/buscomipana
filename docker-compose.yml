@@ -1,0 +1,108 @@
+# Explicit project name so container/network/volume prefixes read "buscomipana-*"
+# regardless of what the checkout folder on disk happens to be named.
+name: buscomipana
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-bmp}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bmp_local_password}
+      POSTGRES_DB: ${POSTGRES_DB:-buscomipana}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    # Extensions (pg_trgm, fuzzystrmatch, cube, earthdistance, pgcrypto) are
+    # created by the first Alembic migration, not an initdb script -- run
+    # `docker compose run --rm backend alembic upgrade head` after first start.
+    healthcheck:
+      # -d is required: without it, pg_isready defaults to probing a database
+      # named after the user (here "admin"), not POSTGRES_DB, which doesn't
+      # exist and fails the healthcheck every interval regardless of whether
+      # the actual database is up and reachable.
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-bmp} -d ${POSTGRES_DB:-buscomipana}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-bmp}:${POSTGRES_PASSWORD:-bmp_local_password}@postgres:5432/${POSTGRES_DB:-buscomipana}
+      REDIS_URL: redis://redis:6379/0
+      MEDIA_LOCAL_PATH: /app/media
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      # Named volume so uploaded photos (LocalDiskStorage) persist across
+      # container recreation without mixing into the bind-mounted source tree.
+      - media_data:/app/media
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  celery-worker:
+    build: ./backend
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-bmp}:${POSTGRES_PASSWORD:-bmp_local_password}@postgres:5432/${POSTGRES_DB:-buscomipana}
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./backend:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: celery -A app.workers.celery_app worker --loglevel=info
+
+  celery-beat:
+    build: ./backend
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-bmp}:${POSTGRES_PASSWORD:-bmp_local_password}@postgres:5432/${POSTGRES_DB:-buscomipana}
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./backend:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: celery -A app.workers.celery_app beat --loglevel=info
+
+  frontend:
+    build:
+      context: ./frontend
+      # The Dockerfile's default (last) stage is now the production nginx
+      # runtime with no Node/npm in it at all -- local dev needs the `dev`
+      # stage specifically (bind-mounted source, Vite's hot-reload server).
+      target: dev
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      VITE_API_BASE_URL: http://localhost:8000/api/v1
+    command: npm run dev -- --host 0.0.0.0
+
+volumes:
+  postgres_data:
+  media_data:

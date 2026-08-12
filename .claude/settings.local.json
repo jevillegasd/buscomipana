@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm --version)",
+      "Bash(docker --version)",
+      "Bash(../.venv/Scripts/python.exe -m pip install -q -e \".[dev]\")",
+      "Bash(uv pip *)",
+      "Bash(../.venv/Scripts/python.exe -c ' *)",
+      "Bash(../.venv/Scripts/python.exe -m py_compile alembic/versions/0001_initial_schema.py alembic/env.py)",
+      "Bash(../.venv/Scripts/python.exe -m pytest tests/test_auth.py -v)",
+      "Bash(../.venv/Scripts/python.exe -m ruff check --fix app tests scripts)",
+      "Bash(../.venv/Scripts/python.exe -m ruff check app tests scripts --statistics)",
+      "Bash(UV_LINK_MODE=copy uv pip install --python ../.venv/Scripts/python.exe -e \".[dev]\")",
+      "Bash(../.venv/Scripts/python.exe -m pytest tests/ -v)",
+      "Bash(npm run *)",
+      "Bash(rm -rf \"c:/Users/jevil/OneDrive/Documents/GitHub/find_my_sibling/frontend/dist\")",
+      "Bash(docker compose *)",
+      "Bash(npx tsc *)",
+      "Bash(echo \"EXIT_CODE:$?\")",
+      "Bash(curl -s \"http://localhost:8000/api/v1/_debug/last-otp?phone=%2B573009990002\")",
+      "Bash(\"../.venv/Scripts/python.exe\" -m ruff check app tests --fix)",
+      "Bash(npm audit *)"
+    ]
+  }
+}
