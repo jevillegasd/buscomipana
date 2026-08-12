@@ -43,11 +43,16 @@ export default function PhoneNumberInput({ value, onChange, required, id }: Phon
         value={callingCode}
         onChange={(e) => emit(e.target.value, local)}
         aria-label="País"
-        className="rounded-md bg-card border border-card px-2 py-2 text-ink text-sm shrink-0"
+        title={SUPPORTED_COUNTRIES.find((c) => c.callingCode === callingCode)?.label}
+        // Fixed narrow width and a compact "+57" label -- the full country
+        // name only needs to be legible while the list is open (the <option>
+        // text below), not while collapsed, so it shouldn't eat into the
+        // room the actual number field has to work with.
+        className="w-[4.5rem] shrink-0 rounded-md bg-card border border-card px-2 py-2 text-ink text-sm"
       >
         {SUPPORTED_COUNTRIES.map((c) => (
-          <option key={c.isoCode} value={c.callingCode}>
-            {c.label} (+{c.callingCode})
+          <option key={c.isoCode} value={c.callingCode} title={c.label}>
+            +{c.callingCode}
           </option>
         ))}
       </select>
