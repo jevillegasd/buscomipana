@@ -25,10 +25,14 @@ export default function PrivacyPolicyModal({ mode, onClose }: PrivacyPolicyModal
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-night/95 p-4">
       <div className="w-full max-w-lg max-h-[85vh] flex flex-col rounded-lg bg-card border border-card">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-night">
+        <div className="flex items-start justify-between gap-3 px-4 py-3 border-b border-night">
           <h2 className="text-lg font-semibold text-ink">{data?.title ?? "Política de privacidad"}</h2>
           {mode === "readonly" && onClose && (
-            <button type="button" onClick={onClose} className="text-sm text-muted hover:text-ink">
+            <button
+              type="button"
+              onClick={onClose}
+              className="shrink-0 text-sm text-muted hover:text-ink"
+            >
               Cerrar
             </button>
           )}

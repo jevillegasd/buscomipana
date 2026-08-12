@@ -44,7 +44,7 @@ class SecurityHeadersMiddleware:
         if not settings.is_local:
             csp = (
                 b"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
-                b"img-src 'self' data:; font-src 'self' data:; connect-src 'self'; "
+                b"img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; "
                 b"frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
             )
             pairs.append((b"content-security-policy", csp))
