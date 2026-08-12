@@ -3,7 +3,7 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict
 
-from app.models.enums import BloodType, SexAtBirth, UserRole, UserStatus
+from app.models.enums import BloodType, DistinguishableGender, UserRole, UserStatus
 
 
 class UserMeOut(BaseModel):
@@ -15,13 +15,14 @@ class UserMeOut(BaseModel):
     blood_type: BloodType | None
     birth_date: date | None
     national_id_number: str | None
-    birth_place: str | None
+    residence_place: str | None
     nationality: str | None
-    sex_at_birth: SexAtBirth | None
+    distinguishable_gender: DistinguishableGender | None
     role: UserRole
     status: UserStatus
     created_at: datetime
     has_profile_photo: bool = False
+    needs_privacy_policy_acceptance: bool = False
 
 
 class UserPublicOut(BaseModel):
@@ -37,9 +38,9 @@ class UserPublicOut(BaseModel):
     full_name: str | None
     blood_type: BloodType | None
     birth_date: date | None
-    birth_place: str | None
+    residence_place: str | None
     nationality: str | None
-    sex_at_birth: SexAtBirth | None
+    distinguishable_gender: DistinguishableGender | None
     national_id_number: str | None = None
     has_profile_photo: bool = False
 
@@ -49,6 +50,6 @@ class UserUpdateIn(BaseModel):
     blood_type: BloodType | None = None
     birth_date: date | None = None
     national_id_number: str | None = None
-    birth_place: str | None = None
+    residence_place: str | None = None
     nationality: str | None = None
-    sex_at_birth: SexAtBirth | None = None
+    distinguishable_gender: DistinguishableGender | None = None

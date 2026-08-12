@@ -19,12 +19,12 @@ from app.core.database import async_session_factory
 from app.models.enums import (
     BloodType,
     Channel,
+    DistinguishableGender,
     MissingPersonReportStatus,
     PingStatus,
     RelationshipType,
     RelativeLinkStatus,
     ResponderCredentialStatus,
-    SexAtBirth,
     UserRole,
 )
 from app.models.missing_person_report import MissingPersonReport
@@ -39,8 +39,8 @@ DEMO_USERS = [
         "blood_type": BloodType.o_pos,
         "birth_date": date(1994, 3, 12),
         "nationality": "Colombiana",
-        "birth_place": "Bogotá, Colombia",
-        "sex_at_birth": SexAtBirth.female,
+        "residence_place": "Bogotá, Colombia",
+        "distinguishable_gender": DistinguishableGender.female,
     },
     {
         "phone_number": "+573001110002",
@@ -48,8 +48,8 @@ DEMO_USERS = [
         "blood_type": BloodType.a_pos,
         "birth_date": date(1990, 7, 22),
         "nationality": "Colombiana",
-        "birth_place": "Medellín, Colombia",
-        "sex_at_birth": SexAtBirth.male,
+        "residence_place": "Medellín, Colombia",
+        "distinguishable_gender": DistinguishableGender.male,
     },
     {
         "phone_number": "+573001110003",
@@ -57,8 +57,8 @@ DEMO_USERS = [
         "blood_type": BloodType.b_neg,
         "birth_date": date(1985, 11, 3),
         "nationality": "Colombiana",
-        "birth_place": "Cali, Colombia",
-        "sex_at_birth": SexAtBirth.male,
+        "residence_place": "Cali, Colombia",
+        "distinguishable_gender": DistinguishableGender.male,
         "role": UserRole.responder,
     },
 ]
@@ -75,8 +75,8 @@ async def get_or_create_user(db, spec: dict) -> User:
         blood_type=spec["blood_type"],
         birth_date=spec["birth_date"],
         nationality=spec["nationality"],
-        birth_place=spec["birth_place"],
-        sex_at_birth=spec["sex_at_birth"],
+        residence_place=spec["residence_place"],
+        distinguishable_gender=spec["distinguishable_gender"],
         role=spec.get("role", UserRole.user),
     )
     db.add(user)
