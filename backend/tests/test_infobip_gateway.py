@@ -23,7 +23,13 @@ async def test_send_otp_auto_provisions_application_and_sends_pin():
             return httpx.Response(200, json={"applicationId": "app-1"})
         if request.url.path == "/2fa/2/applications/app-1/messages":
             return httpx.Response(200, json={"messageId": "msg-1"})
-        if request.url.path == "/2fa/2/pin/app-1/msg-1":
+        if request.url.path == "/2fa/2/pin":
+            import json as _json
+
+            body = _json.loads(request.content)
+            assert body["applicationId"] == "app-1"
+            assert body["messageId"] == "msg-1"
+            assert body["to"] in ("573001234567", "573001234568")
             return httpx.Response(200, json={"pinId": "pin-1"})
         raise AssertionError(f"unexpected request to {request.url.path}")
 
@@ -36,7 +42,7 @@ async def test_send_otp_auto_provisions_application_and_sends_pin():
     assert calls == [
         "/2fa/2/applications",
         "/2fa/2/applications/app-1/messages",
-        "/2fa/2/pin/app-1/msg-1",
+        "/2fa/2/pin",
     ]
 
     # A second send reuses the now-cached application/message ids instead of
@@ -44,13 +50,13 @@ async def test_send_otp_auto_provisions_application_and_sends_pin():
     calls.clear()
     result_2 = await gateway.send_otp("+573001234568", "unused")
     assert result_2.external_reference == "pin-1"
-    assert calls == ["/2fa/2/pin/app-1/msg-1"]
+    assert calls == ["/2fa/2/pin"]
 
 
 @pytest.mark.asyncio
 async def test_send_otp_skips_provisioning_when_ids_preconfigured():
     def handler(request: httpx.Request) -> httpx.Response:
-        assert request.url.path == "/2fa/2/pin/preset-app/preset-msg"
+        assert request.url.path == "/2fa/2/pin"
         return httpx.Response(200, json={"pinId": "pin-9"})
 
     gateway = _gateway(handler)

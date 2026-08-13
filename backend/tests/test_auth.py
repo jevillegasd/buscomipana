@@ -5,8 +5,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.gateways.mock_gateway import get_last_sent_message
+from app.models.enums import Channel
 from app.models.otp import OtpVerification
-from app.services import auth_service
+from app.services import auth_service, email_service
 
 PHONE = "+573001234567"
 
@@ -181,3 +182,55 @@ async def test_logout_all_revokes_remembered_device_too(client, monkeypatch):
     resp = await client.post("/api/v1/auth/otp/request", json={"phone_number": phone})
     assert resp.status_code == 202
     assert resp.json()["skipped_otp"] is False
+
+
+@pytest.mark.asyncio
+async def test_otp_request_with_email_sends_via_email_not_sms(client, monkeypatch, db_engine):
+    # Falls back to email delivery when SMS is unreliable/blocked for this
+    # number's carrier -- the account is still identified by phone_number
+    # (see auth_service.request_login_otp), only the delivery channel changes.
+    sent = []
+
+    async def fake_send_otp_email(to_address: str, code: str) -> bool:
+        sent.append((to_address, code))
+        return True
+
+    monkeypatch.setattr(email_service, "send_otp_email", fake_send_otp_email)
+
+    phone = "+573009998801"
+    resp = await client.post(
+        "/api/v1/auth/otp/request", json={"phone_number": phone, "email": "test@example.com"}
+    )
+    assert resp.status_code == 202, resp.text
+
+    # Nothing went out over the SMS gateway for this number.
+    assert get_last_sent_message(phone) is None
+    assert len(sent) == 1
+    assert sent[0][0] == "test@example.com"
+    code = sent[0][1]
+
+    session_factory = async_sessionmaker(db_engine, expire_on_commit=False)
+    async with session_factory() as session:
+        result = await session.execute(select(OtpVerification).where(OtpVerification.phone_number == phone))
+        otp = result.scalar_one()
+        assert otp.channel == Channel.email
+
+    resp = await client.post("/api/v1/auth/otp/verify", json={"phone_number": phone, "code": code})
+    assert resp.status_code == 200, resp.text
+
+
+@pytest.mark.asyncio
+async def test_otp_request_email_send_failure_is_recorded_but_still_returns_202(client, monkeypatch):
+    async def failing_send_otp_email(to_address: str, code: str) -> bool:
+        return False
+
+    monkeypatch.setattr(email_service, "send_otp_email", failing_send_otp_email)
+
+    phone = "+573009998802"
+    resp = await client.post(
+        "/api/v1/auth/otp/request", json={"phone_number": phone, "email": "test@example.com"}
+    )
+    # Same as a failed SMS send (see _create_and_send_otp) -- the failure is
+    # recorded in the outbox for visibility, not surfaced as a request error,
+    # since the caller has already been told a code is "on its way".
+    assert resp.status_code == 202, resp.text

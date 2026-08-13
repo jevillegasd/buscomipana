@@ -47,6 +47,28 @@ class Settings(BaseSettings):
     infobip_2fa_application_id: str = ""
     infobip_2fa_message_id: str = ""
 
+    # Alternate SMS_GATEWAY value ("twilio") -- a fallback provider for when a
+    # carrier/country blocks traffic on the primary one. messaging_service_sid
+    # takes precedence over from_number when both are set (see
+    # TwilioGateway.send_sms).
+    twilio_account_sid: str = ""
+    twilio_auth_token: str = ""
+    twilio_from_number: str = ""
+    twilio_messaging_service_sid: str = ""
+
+    # Email OTP fallback -- an alternate delivery channel for the same
+    # phone-linked account, offered on the login screen when SMS doesn't
+    # arrive (see services/email_service.py, auth_service.request_login_otp).
+    # Plain SMTP rather than a provider SDK: works unchanged against Gmail,
+    # Outlook/Office365, SES, SendGrid, etc. -- whichever the deploy has
+    # credentials for, no provider-specific code.
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from_address: str = ""
+    smtp_use_tls: bool = True
+
     admin_phone_numbers: str = ""
 
     otp_code_length: int = 6

@@ -55,6 +55,12 @@ export interface PolicyDocument {
   content: string;
 }
 
+export interface TermsDocument {
+  version: string;
+  title: string;
+  content: string;
+}
+
 export interface OtpRequestResponse {
   detail: string;
   skipped_otp: boolean;

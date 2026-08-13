@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 
-from app.schemas.common import PhoneNumber
+from app.schemas.common import EmailAddress, PhoneNumber
 
 
 class OtpRequestIn(BaseModel):
@@ -10,6 +10,10 @@ class OtpRequestIn(BaseModel):
     never trigger a phone_change OTP for someone else's account."""
 
     phone_number: PhoneNumber
+    # Optional fallback delivery channel: the account is still identified by
+    # phone_number (unchanged) -- setting this only changes where the code is
+    # sent, for when SMS is unreliable/blocked for this number's carrier.
+    email: EmailAddress | None = None
 
 
 class OtpVerifyIn(BaseModel):

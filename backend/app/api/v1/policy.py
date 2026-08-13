@@ -6,7 +6,7 @@ from app.core.database import get_db
 from app.core.limiter import get_client_ip
 from app.deps import get_current_user
 from app.models.user import User
-from app.schemas.policy import PolicyAcceptanceOut, PolicyOut
+from app.schemas.policy import PolicyAcceptanceOut, PolicyOut, TermsOut
 from app.services import policy_service
 
 router = APIRouter(prefix="/policy", tags=["policy"])
@@ -40,6 +40,20 @@ async def get_my_privacy_policy(user: User = Depends(get_current_user)):
     document = policy_service.get_policy_for_country(country)
     return PolicyOut(
         country=country,
+        version=document.version,
+        title=document.title,
+        content=policy_service.get_policy_content(document),
+    )
+
+
+@router.get("/terms", response_model=TermsOut)
+async def get_terms_of_service():
+    """Public and unauthenticated, same as /privacy -- linked next to the
+    privacy policy on the login screen. One document, no per-country variant
+    and no acceptance gate (unlike the privacy policy's Habeas Data consent
+    requirement)."""
+    document = policy_service.TERMS_OF_SERVICE
+    return TermsOut(
         version=document.version,
         title=document.title,
         content=policy_service.get_policy_content(document),

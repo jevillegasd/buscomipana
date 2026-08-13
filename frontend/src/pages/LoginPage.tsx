@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { api, ApiError, markLoggedIn } from "../api/client";
 import { DEFAULT_COUNTRY } from "../api/countries";
 import PhoneNumberInput from "../components/PhoneNumberInput";
 import PrivacyPolicyModal from "../components/PrivacyPolicyModal";
+import TermsOfServiceModal from "../components/TermsOfServiceModal";
 import type { OtpRequestResponse, TokenPair } from "../api/types";
 
 export default function LoginPage() {
@@ -15,6 +16,10 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
   const [showPolicy, setShowPolicy] = useState(false);
+  const [showTerms, setShowTerms] = useState(false);
+  const [showEmailFallback, setShowEmailFallback] = useState(false);
+  const [email, setEmail] = useState("");
+  const [lastDeliveryEmail, setLastDeliveryEmail] = useState<string | null>(null);
 
   useEffect(() => {
     if (resendCooldown <= 0) return;
@@ -22,11 +27,14 @@ export default function LoginPage() {
     return () => clearInterval(timer);
   }, [resendCooldown]);
 
-  async function sendOtp() {
+  async function sendOtp(deliveryEmail?: string) {
     setError(null);
     setLoading(true);
     try {
-      const res = await api.post<OtpRequestResponse>("/auth/otp/request", { phone_number: phoneNumber });
+      const res = await api.post<OtpRequestResponse>("/auth/otp/request", {
+        phone_number: phoneNumber,
+        ...(deliveryEmail ? { email: deliveryEmail } : {}),
+      });
       if (res.skipped_otp) {
         // This browser already has a "remember me" grant for this exact
         // number (set on a previous logout) -- the backend logged us in
@@ -37,6 +45,8 @@ export default function LoginPage() {
       }
       setStep("code");
       setResendCooldown(res.resend_cooldown_seconds ?? 60);
+      setLastDeliveryEmail(deliveryEmail ?? null);
+      setShowEmailFallback(false);
     } catch (err) {
       if (err instanceof ApiError && err.status === 429) {
         setResendCooldown(err.retryAfterSeconds ?? 60);
@@ -70,68 +80,111 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[80vh] gap-6">
-      <div className="text-center">
-        <h1 className="text-2xl font-bold text-ink">BuscoMiPana</h1>
-        <p className="text-muted text-sm mt-1">Ingresa tu celular para conectarte con tus panas.</p>
+    <div className="h-full flex flex-col">
+      <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-6 overflow-y-auto px-1 py-4">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-ink">BuscoMiPana</h1>
+          <p className="text-muted text-sm mt-1">Ingresa tu celular para conectarte con tus panas.</p>
+        </div>
+
+        {step === "phone" ? (
+          <form onSubmit={requestCode} className="w-full max-w-xs flex flex-col gap-3">
+            <label className="text-sm text-muted">
+              Número de teléfono
+              <PhoneNumberInput value={phoneNumber} onChange={setPhoneNumber} required />
+            </label>
+            <button
+              type="submit"
+              disabled={loading}
+              className="rounded-md bg-safe hover:bg-safe/90 disabled:opacity-50 px-4 py-3 font-semibold text-night"
+            >
+              {loading ? "Enviando..." : "Login (OTP)"}
+            </button>
+            {error && <p className="text-danger text-sm">{error}</p>}
+          </form>
+        ) : (
+          <form onSubmit={verifyCode} className="w-full max-w-xs flex flex-col gap-3">
+            <p className="text-sm text-muted">
+              {lastDeliveryEmail ? (
+                <>
+                  Ingresa el código enviado a <span className="text-ink">{lastDeliveryEmail}</span>
+                </>
+              ) : (
+                <>
+                  Ingresa el código enviado a <span className="text-ink">{phoneNumber}</span>
+                </>
+              )}
+            </p>
+            <input
+              type="text"
+              inputMode="numeric"
+              required
+              value={code}
+              onChange={(e) => {
+                setCode(e.target.value);
+                e.target.setCustomValidity("");
+              }}
+              onInvalid={(e) => e.currentTarget.setCustomValidity("Ingresa el código que te enviamos.")}
+              placeholder="123456"
+              className="rounded-md bg-card border border-card px-3 py-2 text-ink tracking-widest text-center"
+            />
+            <button
+              type="submit"
+              disabled={loading}
+              className="rounded-md bg-safe hover:bg-safe/90 disabled:opacity-50 px-4 py-3 font-semibold text-night"
+            >
+              {loading ? "Verificando..." : "Verificar y continuar"}
+            </button>
+            <button
+              type="button"
+              onClick={() => sendOtp()}
+              disabled={loading || resendCooldown > 0}
+              className="text-sm text-muted disabled:opacity-50 underline decoration-dotted"
+            >
+              {resendCooldown > 0 ? `Reenviar código (espera ${resendCooldown}s)` : "Reenviar código"}
+            </button>
+
+            {!showEmailFallback ? (
+              <button
+                type="button"
+                onClick={() => setShowEmailFallback(true)}
+                className="text-sm text-muted underline decoration-dotted"
+              >
+                ¿No te llegó el SMS? Recíbelo por correo
+              </button>
+            ) : (
+              <div className="flex flex-col gap-2 rounded-md bg-card border border-card p-3">
+                <label className="text-sm text-muted">
+                  Correo electrónico
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="tucorreo@ejemplo.com"
+                    className="mt-1 w-full rounded-md bg-night border border-card px-3 py-2 text-ink"
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={() => sendOtp(email)}
+                  disabled={loading || !email || resendCooldown > 0}
+                  className="rounded-md bg-brand hover:bg-brand/90 disabled:opacity-50 px-4 py-2 text-sm font-semibold text-night"
+                >
+                  {resendCooldown > 0 ? `Espera ${resendCooldown}s` : "Enviar código por correo"}
+                </button>
+              </div>
+            )}
+
+            <button type="button" onClick={() => setStep("phone")} className="text-sm text-muted underline">
+              Usar otro número
+            </button>
+            {error && <p className="text-danger text-sm">{error}</p>}
+          </form>
+        )}
       </div>
 
-      {step === "phone" ? (
-        <form onSubmit={requestCode} className="w-full max-w-xs flex flex-col gap-3">
-          <label className="text-sm text-muted">
-            Número de teléfono
-            <PhoneNumberInput value={phoneNumber} onChange={setPhoneNumber} required />
-          </label>
-          <button
-            type="submit"
-            disabled={loading}
-            className="rounded-md bg-safe hover:bg-safe/90 disabled:opacity-50 px-4 py-3 font-semibold text-night"
-          >
-            {loading ? "Enviando..." : "Enviar código"}
-          </button>
-          {error && <p className="text-danger text-sm">{error}</p>}
-        </form>
-      ) : (
-        <form onSubmit={verifyCode} className="w-full max-w-xs flex flex-col gap-3">
-          <p className="text-sm text-muted">
-            Ingresa el código enviado a <span className="text-ink">{phoneNumber}</span>
-          </p>
-          <input
-            type="text"
-            inputMode="numeric"
-            required
-            value={code}
-            onChange={(e) => {
-              setCode(e.target.value);
-              e.target.setCustomValidity("");
-            }}
-            onInvalid={(e) => e.currentTarget.setCustomValidity("Ingresa el código que te enviamos.")}
-            placeholder="123456"
-            className="rounded-md bg-card border border-card px-3 py-2 text-ink tracking-widest text-center"
-          />
-          <button
-            type="submit"
-            disabled={loading}
-            className="rounded-md bg-safe hover:bg-safe/90 disabled:opacity-50 px-4 py-3 font-semibold text-night"
-          >
-            {loading ? "Verificando..." : "Verificar y continuar"}
-          </button>
-          <button
-            type="button"
-            onClick={sendOtp}
-            disabled={loading || resendCooldown > 0}
-            className="text-sm text-muted disabled:opacity-50 underline decoration-dotted"
-          >
-            {resendCooldown > 0 ? `Reenviar código (espera ${resendCooldown}s)` : "Reenviar código"}
-          </button>
-          <button type="button" onClick={() => setStep("phone")} className="text-sm text-muted underline">
-            Usar otro número
-          </button>
-          {error && <p className="text-danger text-sm">{error}</p>}
-        </form>
-      )}
-
-      <footer className="mt-4">
+      <footer className="shrink-0 flex items-center justify-center gap-3 py-4">
         <button
           type="button"
           onClick={() => setShowPolicy(true)}
@@ -139,9 +192,22 @@ export default function LoginPage() {
         >
           Política de privacidad
         </button>
+        <span className="text-xs text-muted">·</span>
+        <button
+          type="button"
+          onClick={() => setShowTerms(true)}
+          className="text-xs text-muted underline decoration-dotted hover:text-ink"
+        >
+          Términos y condiciones
+        </button>
+        <span className="text-xs text-muted">·</span>
+        <Link to="/about" className="text-xs text-muted underline decoration-dotted hover:text-ink">
+          Acerca de
+        </Link>
       </footer>
 
       {showPolicy && <PrivacyPolicyModal mode="readonly" onClose={() => setShowPolicy(false)} />}
+      {showTerms && <TermsOfServiceModal onClose={() => setShowTerms(false)} />}
     </div>
   );
 }

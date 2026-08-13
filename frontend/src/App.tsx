@@ -4,6 +4,7 @@ import { api, isLoggedIn } from "./api/client";
 import NavBar from "./components/NavBar";
 import OfflineBanner from "./components/OfflineBanner";
 import PrivacyPolicyModal from "./components/PrivacyPolicyModal";
+import AboutPage from "./pages/AboutPage";
 import LoginPage from "./pages/LoginPage";
 import PingsPage from "./pages/PingsPage";
 import ProfilePage from "./pages/ProfilePage";
@@ -39,6 +40,7 @@ export default function App() {
       <main className="flex-1 p-4">
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/about" element={<AboutPage />} />
           <Route
             path="/"
             element={

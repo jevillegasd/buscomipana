@@ -16,7 +16,7 @@ from app.core.security import (
     refresh_token_expiry,
     verify_otp_code,
 )
-from app.gateways.base import render_otp_message
+from app.gateways.base import GatewaySendResult, render_otp_message
 from app.gateways.factory import get_gateway
 from app.models.enums import Channel, OtpPurpose, PingStatus, SmsOutboxPurpose, UserRole
 from app.models.otp import (
@@ -27,6 +27,7 @@ from app.models.otp import (
 )
 from app.models.user import User
 from app.services import (
+    email_service,
     missing_person_report_service,
     ping_service,
     relative_link_service,
@@ -63,7 +64,12 @@ class OtpCooldownActive(OtpError):
 
 
 async def _create_and_send_otp(
-    db: AsyncSession, *, phone_number: str, purpose: OtpPurpose, user_id: uuid.UUID | None
+    db: AsyncSession,
+    *,
+    phone_number: str,
+    purpose: OtpPurpose,
+    user_id: uuid.UUID | None,
+    email: str | None = None,
 ) -> OtpVerification:
     last_result = await db.execute(
         select(OtpVerification)
@@ -77,6 +83,40 @@ async def _create_and_send_otp(
         elapsed = datetime.now(UTC) - ensure_aware(last.created_at)
         if elapsed < cooldown:
             raise OtpCooldownActive(retry_after_seconds=int((cooldown - elapsed).total_seconds()) + 1)
+
+    # Email is a fallback delivery channel for the same phone-linked account
+    # (see docs on Channel.email) -- the account is still identified by
+    # phone_number regardless of where the code was actually delivered, so
+    # verification (_consume_otp) needs no changes at all: it's still a
+    # locally-hashed code looked up by (phone_number, purpose).
+    if email:
+        code = generate_otp_code()
+        otp = OtpVerification(
+            phone_number=phone_number,
+            user_id=user_id,
+            purpose=purpose,
+            code_hash=hash_otp_code(code),
+            channel=Channel.email,
+            expires_at=datetime.now(UTC) + timedelta(minutes=settings.otp_ttl_minutes),
+        )
+        db.add(otp)
+        await db.flush()
+
+        sent = await email_service.send_otp_email(email, code)
+        await sms_outbox_service.record_send_result(
+            db,
+            to_phone_number=phone_number,
+            purpose=SmsOutboxPurpose.otp,
+            body=render_otp_message(code),
+            result=GatewaySendResult(
+                provider="smtp",
+                provider_message_id="",
+                accepted=sent,
+                error=None if sent else "SMTP send failed",
+            ),
+            related_otp_id=otp.id,
+        )
+        return otp
 
     gateway = get_gateway()
 
@@ -134,14 +174,15 @@ async def _create_and_send_otp(
     return otp
 
 
-async def request_login_otp(db: AsyncSession, phone_number: str) -> OtpVerification:
+async def request_login_otp(db: AsyncSession, phone_number: str, email: str | None = None) -> OtpVerification:
     # Checked before sending anything -- an unsupported-country number should
     # never cost SMS spend, and shouldn't be able to probe whether an account
-    # exists there either.
+    # exists there either. Still applies when email is set: phone_number is
+    # always the account identifier, email is only ever a delivery address.
     if not is_allowed_phone_number(phone_number):
         raise UnsupportedCountry(phone_number)
     return await _create_and_send_otp(
-        db, phone_number=phone_number, purpose=OtpPurpose.signup_or_login, user_id=None
+        db, phone_number=phone_number, purpose=OtpPurpose.signup_or_login, user_id=None, email=email
     )
 
 

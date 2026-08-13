@@ -123,10 +123,17 @@ class InfobipGateway(NotificationGateway):
         try:
             async with self._client() as client:
                 application_id, message_id = await self._ensure_2fa_application(client)
+                # Not /2fa/2/pin/{applicationId}/{messageId} -- that path 404s
+                # against the real API despite looking like the natural REST
+                # shape. applicationId/messageId go in the body instead.
                 response = await client.post(
-                    f"{self.base_url}/2fa/2/pin/{application_id}/{message_id}",
+                    f"{self.base_url}/2fa/2/pin",
                     headers=self._headers(),
-                    json={"to": to_phone_number.lstrip("+")},
+                    json={
+                        "applicationId": application_id,
+                        "messageId": message_id,
+                        "to": to_phone_number.lstrip("+"),
+                    },
                 )
             response.raise_for_status()
             pin_id = response.json()["pinId"]

@@ -78,7 +78,7 @@ async def request_otp(request: Request, body: OtpRequestIn, response: Response, 
         return {"detail": "Dispositivo de confianza, código omitido", "skipped_otp": True}
 
     try:
-        await auth_service.request_login_otp(db, phone_number=body.phone_number)
+        await auth_service.request_login_otp(db, phone_number=body.phone_number, email=body.email)
     except auth_service.UnsupportedCountry:
         await db.rollback()
         raise HTTPException(

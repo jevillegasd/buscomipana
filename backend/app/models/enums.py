@@ -54,6 +54,10 @@ class Channel(str, enum.Enum):
     sms = "sms"
     ivr_call = "ivr_call"
     ussd = "ussd"
+    # OTP delivery only (see OtpVerification.channel) -- a fallback when SMS
+    # is unreliable/blocked for a given carrier or country. Not a ping/pong
+    # channel, so it's never used on Ping/Pong.channel.
+    email = "email"
 
 
 class RelationshipType(str, enum.Enum):
