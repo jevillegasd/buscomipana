@@ -1,4 +1,4 @@
-# Buscomipana
+# BuscoMiPana (Find My Sibling)
 
 A phone-first safety check-in and missing-person matching platform for Colombia and Latin America, built to keep working when connectivity is poor.
 
