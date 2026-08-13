@@ -6,8 +6,6 @@ Create an account with just a phone number (OTP, no password). "Ping" that you'r
 
 See **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** for the full design: data model, privacy/visibility model, channel abstraction (web/SMS today, IVR/USSD later), media storage, background jobs, and the complete API/environment-variable reference.
 
-> The project was previously named `find_my_sibling` — the local checkout folder still uses that name (renaming it was skipped to avoid disrupting an active OneDrive sync), but every package name, Docker container/DB name, API title, and piece of UI copy has been rebranded to Buscomipana.
-
 ## Stack
 
 - **Backend**: FastAPI + SQLAlchemy 2.0 (async) + PostgreSQL, Alembic migrations, Celery + Redis for background jobs, SQLAdmin for ops.
