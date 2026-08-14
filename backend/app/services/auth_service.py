@@ -16,17 +16,19 @@ from app.core.security import (
     refresh_token_expiry,
     verify_otp_code,
 )
-from app.gateways.base import render_otp_message
+from app.gateways.base import GatewaySendResult, render_otp_message
 from app.gateways.factory import get_gateway
 from app.models.enums import Channel, OtpPurpose, PingStatus, SmsOutboxPurpose, UserRole
 from app.models.otp import (
     AuthSession,
+    EmailChange,
     OtpVerification,
     PhoneNumberChange,
     TrustedDevice,
 )
 from app.models.user import User
 from app.services import (
+    email_service,
     missing_person_report_service,
     ping_service,
     relative_link_service,
@@ -52,6 +54,27 @@ class PhoneNumberTaken(OtpError):
     pass
 
 
+class EmailTaken(OtpError):
+    pass
+
+
+class NoVerifiedEmailOnFile(OtpError):
+    """Raised when email-channel login is requested but this phone number
+    has no existing account with a verified email to send to. Never send an
+    OTP to a client-supplied address for login (Issue #10) -- only to
+    whatever's already on file, set via the authenticated request_email_
+    change/confirm_email_change flow."""
+
+
+class PhoneNotVerified(OtpError):
+    """Raised by request_email_change: an account can't associate/change its
+    email until phone_verified_at is set (a real SMS-delivered OTP has been
+    consumed for this number). Defense in depth for Issue #10 -- stops an
+    account that only exists because of the vulnerable email-any-address
+    path (phone_verified_at NULL) from entrenching further via email before
+    it's ever proven the phone is actually its own."""
+
+
 class UnsupportedCountry(OtpError):
     pass
 
@@ -63,7 +86,12 @@ class OtpCooldownActive(OtpError):
 
 
 async def _create_and_send_otp(
-    db: AsyncSession, *, phone_number: str, purpose: OtpPurpose, user_id: uuid.UUID | None
+    db: AsyncSession,
+    *,
+    phone_number: str,
+    purpose: OtpPurpose,
+    user_id: uuid.UUID | None,
+    email: str | None = None,
 ) -> OtpVerification:
     last_result = await db.execute(
         select(OtpVerification)
@@ -73,10 +101,94 @@ async def _create_and_send_otp(
     )
     last = last_result.scalar_one_or_none()
     if last is not None:
+        # Switching to email for the first time skips the cooldown, even if
+        # an SMS was just sent seconds ago -- the whole point of the email
+        # fallback is for when SMS isn't arriving, so making someone wait out
+        # its cooldown before they can even try the alternative defeats the
+        # purpose. Once they've already used email, normal cooldown applies
+        # again to every further attempt on either channel (this is a one-time
+        # pass per channel switch, not a way to bypass it repeatedly).
+        email_ever_used_result = await db.execute(
+            select(OtpVerification)
+            .where(
+                OtpVerification.phone_number == phone_number,
+                OtpVerification.purpose == purpose,
+                OtpVerification.channel == Channel.email,
+            )
+            .limit(1)
+        )
+        email_ever_used = email_ever_used_result.scalar_one_or_none() is not None
+        is_first_switch_to_email = bool(email) and not email_ever_used
         cooldown = timedelta(seconds=settings.otp_resend_cooldown_seconds)
         elapsed = datetime.now(UTC) - ensure_aware(last.created_at)
-        if elapsed < cooldown:
+        if elapsed < cooldown and not is_first_switch_to_email:
             raise OtpCooldownActive(retry_after_seconds=int((cooldown - elapsed).total_seconds()) + 1)
+
+    # Email is a fallback delivery channel for the same phone-linked account
+    # (see docs on Channel.email) -- the account is still identified by
+    # phone_number regardless of where the code was actually delivered, so
+    # verification (_consume_otp) needs no changes at all: it's still a
+    # locally-hashed code looked up by (phone_number, purpose).
+    if email:
+        code = generate_otp_code()
+        otp = OtpVerification(
+            phone_number=phone_number,
+            user_id=user_id,
+            purpose=purpose,
+            code_hash=hash_otp_code(code),
+            channel=Channel.email,
+            email_address=email,
+            expires_at=datetime.now(UTC) + timedelta(minutes=settings.otp_ttl_minutes),
+        )
+        db.add(otp)
+        await db.flush()
+
+        sent = await email_service.send_otp_email(email, code)
+        await sms_outbox_service.record_send_result(
+            db,
+            to_phone_number=phone_number,
+            purpose=SmsOutboxPurpose.otp,
+            body=render_otp_message(code),
+            result=GatewaySendResult(
+                provider="smtp",
+                provider_message_id="",
+                accepted=sent,
+                error=None if sent else "SMTP send failed",
+            ),
+            related_otp_id=otp.id,
+        )
+        return otp
+
+    gateway = get_gateway()
+
+    # Provider-managed OTP (see NotificationGateway.verifies_otp_externally,
+    # e.g. Infobip's 2FA product): the provider generates and owns the PIN
+    # value, this app never sees it, so there's no code to hash -- send_otp's
+    # `code` argument is unused for these gateways, and the resulting
+    # external_reference (e.g. Infobip's pinId) is what verify_otp_external
+    # is later called with instead of a local hash comparison.
+    if gateway.verifies_otp_externally:
+        result = await gateway.send_otp(phone_number, "")
+        otp = OtpVerification(
+            phone_number=phone_number,
+            user_id=user_id,
+            purpose=purpose,
+            code_hash=None,
+            external_reference=result.external_reference,
+            channel=Channel.sms,
+            expires_at=datetime.now(UTC) + timedelta(minutes=settings.otp_ttl_minutes),
+        )
+        db.add(otp)
+        await db.flush()
+        await sms_outbox_service.record_send_result(
+            db,
+            to_phone_number=phone_number,
+            purpose=SmsOutboxPurpose.otp,
+            body="[PIN administrado por el proveedor -- 2FA de Infobip]",
+            result=result,
+            related_otp_id=otp.id,
+        )
+        return otp
 
     code = generate_otp_code()
     otp = OtpVerification(
@@ -90,7 +202,6 @@ async def _create_and_send_otp(
     db.add(otp)
     await db.flush()
 
-    gateway = get_gateway()
     result = await gateway.send_otp(phone_number, code)
     await sms_outbox_service.record_send_result(
         db,
@@ -104,14 +215,34 @@ async def _create_and_send_otp(
     return otp
 
 
-async def request_login_otp(db: AsyncSession, phone_number: str) -> OtpVerification:
+async def request_login_otp(
+    db: AsyncSession, phone_number: str, use_email: bool = False
+) -> OtpVerification:
     # Checked before sending anything -- an unsupported-country number should
     # never cost SMS spend, and shouldn't be able to probe whether an account
     # exists there either.
     if not is_allowed_phone_number(phone_number):
         raise UnsupportedCountry(phone_number)
+
+    email = None
+    if use_email:
+        # Issue #10: the caller chooses the *channel*, never the address --
+        # this only ever sends to whatever's already stored+verified on the
+        # account for this phone_number, exactly like an authenticator app
+        # doesn't let you type in someone else's phone. A brand-new phone
+        # number (no account yet) has nothing to send to, by construction --
+        # first-ever verification of any phone number can only happen via
+        # real SMS, never email.
+        result = await db.execute(
+            select(User).where(User.phone_number == phone_number, User.deleted_at.is_(None))
+        )
+        user = result.scalar_one_or_none()
+        if user is None or user.email is None or user.email_verified_at is None:
+            raise NoVerifiedEmailOnFile(phone_number)
+        email = user.email
+
     return await _create_and_send_otp(
-        db, phone_number=phone_number, purpose=OtpPurpose.signup_or_login, user_id=None
+        db, phone_number=phone_number, purpose=OtpPurpose.signup_or_login, user_id=None, email=email
     )
 
 
@@ -123,6 +254,33 @@ async def request_phone_change_otp(db: AsyncSession, *, user: User, new_phone_nu
         raise PhoneNumberTaken(new_phone_number)
     return await _create_and_send_otp(
         db, phone_number=new_phone_number, purpose=OtpPurpose.phone_change, user_id=user.id
+    )
+
+
+async def request_email_change(db: AsyncSession, *, user: User, new_email: str) -> OtpVerification:
+    """Covers both the first-ever association (user.email is None) and a
+    later change -- same flow either way. Requires phone_verified_at to
+    already be set (see PhoneNotVerified's docstring): an account that's
+    never proven it controls its own phone number shouldn't be able to
+    entrench further by attaching an email before it does."""
+    if user.phone_verified_at is None:
+        raise PhoneNotVerified(user.id)
+
+    new_email = new_email.strip().lower()
+    existing = await db.execute(
+        select(User).where(User.email == new_email, User.id != user.id, User.deleted_at.is_(None))
+    )
+    if existing.scalar_one_or_none() is not None:
+        raise EmailTaken(new_email)
+
+    # Reuses _create_and_send_otp's email branch directly by always passing
+    # email=new_email -- this is the one case where the "channel switch skips
+    # cooldown" logic in that function doesn't apply (this purpose has its
+    # own independent cooldown lineage, scoped by (phone_number, purpose)
+    # same as phone_change), and code delivery/hashing/outbox auditing all
+    # stay identical to every other OTP path.
+    return await _create_and_send_otp(
+        db, phone_number=user.phone_number, purpose=OtpPurpose.email_change, user_id=user.id, email=new_email
     )
 
 
@@ -150,7 +308,19 @@ async def _consume_otp(
         raise TooManyOtpAttempts()
 
     otp.attempt_count += 1
-    if not verify_otp_code(code, otp.code_hash):
+
+    if otp.external_reference:
+        gateway = get_gateway()
+        verified = await gateway.verify_otp_external(external_reference=otp.external_reference, code=code)
+    elif otp.code_hash:
+        verified = verify_otp_code(code, otp.code_hash)
+    else:
+        # Neither set means the original send itself failed (see
+        # _create_and_send_otp) -- there's nothing to check the code
+        # against, so it can never verify.
+        verified = False
+
+    if not verified:
         await db.flush()
         raise InvalidOrExpiredOtp()
 
@@ -160,7 +330,7 @@ async def _consume_otp(
 
 
 async def verify_login_otp(db: AsyncSession, *, phone_number: str, code: str) -> tuple[User, bool]:
-    await _consume_otp(db, phone_number=phone_number, code=code, purpose=OtpPurpose.signup_or_login)
+    otp = await _consume_otp(db, phone_number=phone_number, code=code, purpose=OtpPurpose.signup_or_login)
 
     result = await db.execute(select(User).where(User.phone_number == phone_number, User.deleted_at.is_(None)))
     user = result.scalar_one_or_none()
@@ -170,7 +340,15 @@ async def verify_login_otp(db: AsyncSession, *, phone_number: str, code: str) ->
         # no invite system yet), so a phone number listed in ADMIN_PHONE_NUMBERS
         # is promoted to admin the moment it first signs up.
         role = UserRole.admin if phone_number in settings.admin_phone_number_list else UserRole.user
-        user = User(phone_number=phone_number, role=role)
+        # A brand-new account can only ever reach this branch via a real
+        # SMS-delivered OTP -- request_login_otp requires an *existing* user
+        # with a verified email before it'll use the email channel at all
+        # (Issue #10), so otp.channel here is always sms.
+        user = User(
+            phone_number=phone_number,
+            role=role,
+            phone_verified_at=datetime.now(UTC) if otp.channel == Channel.sms else None,
+        )
         db.add(user)
         await db.flush()
 
@@ -202,6 +380,15 @@ async def verify_login_otp(db: AsyncSession, *, phone_number: str, code: str) ->
         await relative_link_service.resolve_open_links_for_new_user(db, new_user=user)
     else:
         user.last_login_at = datetime.now(UTC)
+        # Issue #10 remediation path: an existing account whose phone was
+        # never actually proven (NULL -- only possible for accounts that
+        # predate this fix) becomes verified the moment it completes a real
+        # SMS OTP, same as a brand-new signup. Doesn't apply to an
+        # email-channel login -- that never proves phone ownership, and
+        # could only happen here anyway if phone_verified_at were already
+        # set (request_login_otp requires it to offer email at all).
+        if user.phone_verified_at is None and otp.channel == Channel.sms:
+            user.phone_verified_at = datetime.now(UTC)
 
     return user, is_new_account
 
@@ -216,6 +403,34 @@ async def confirm_phone_change(db: AsyncSession, *, user: User, new_phone_number
             user_id=user.id,
             old_phone_number=old_phone_number,
             new_phone_number=new_phone_number,
+            verified_via_otp_id=otp.id,
+            changed_at=datetime.now(UTC),
+        )
+    )
+    await db.flush()
+    return user
+
+
+async def confirm_email_change(db: AsyncSession, *, user: User, new_email: str, code: str) -> User:
+    new_email = new_email.strip().lower()
+    otp = await _consume_otp(
+        db, phone_number=user.phone_number, code=code, purpose=OtpPurpose.email_change
+    )
+    # The code alone isn't enough proof -- it must also have been the one
+    # actually sent to *this* address, otherwise an authenticated caller
+    # could request a code to their own inbox and use it to confirm a
+    # completely different address they've never proven they control.
+    if otp.email_address != new_email:
+        raise InvalidOrExpiredOtp()
+
+    old_email = user.email
+    user.email = new_email
+    user.email_verified_at = datetime.now(UTC)
+    db.add(
+        EmailChange(
+            user_id=user.id,
+            old_email=old_email,
+            new_email=new_email,
             verified_via_otp_id=otp.id,
             changed_at=datetime.now(UTC),
         )

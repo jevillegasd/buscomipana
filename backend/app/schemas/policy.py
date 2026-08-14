@@ -14,3 +14,9 @@ class PolicyAcceptanceOut(BaseModel):
     country: str
     version: str
     accepted_at: datetime
+
+
+class TermsOut(BaseModel):
+    version: str
+    title: str
+    content: str

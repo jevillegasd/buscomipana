@@ -39,6 +39,15 @@ DEFAULT_POLICY = PolicyDocument(
     filename="default.md",
 )
 
+# Unlike the privacy policy, terms of service aren't country-specific and
+# there's no acceptance-tracking gate for them (PolicyAcceptance exists
+# specifically for Habeas Data consent) -- just one versioned document.
+TERMS_OF_SERVICE = PolicyDocument(
+    version="2026-08-13",
+    title="Términos y Condiciones de Uso",
+    filename="terms.md",
+)
+
 
 @lru_cache
 def _read_content(filename: str) -> str:

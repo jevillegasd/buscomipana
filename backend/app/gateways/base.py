@@ -73,6 +73,12 @@ class GatewaySendResult:
     provider_message_id: str
     accepted: bool
     error: str | None = None
+    # Set only by gateways where the *provider* generates and owns the OTP
+    # value (see NotificationGateway.verifies_otp_externally) -- an opaque
+    # handle (e.g. Infobip's pinId) auth_service persists on the
+    # OtpVerification row instead of a locally-hashed code, and passes back
+    # to verify_otp_external to check what the user typed.
+    external_reference: str | None = None
 
 
 @dataclass
@@ -99,11 +105,25 @@ class NotificationGateway(ABC):
     not touching any calling code.
     """
 
+    # True for gateways whose send_otp routes through a provider-managed OTP
+    # product (Infobip's 2FA API) instead of sending a code this app
+    # generated itself. When True, auth_service skips generating/hashing its
+    # own code for send_otp and, on verify, calls verify_otp_external instead
+    # of comparing against OtpVerification.code_hash -- the provider is
+    # authoritative for whether the code the user typed is correct.
+    verifies_otp_externally: bool = False
+
     @abstractmethod
     async def send_otp(self, to_phone_number: str, code: str) -> GatewaySendResult: ...
 
     @abstractmethod
     async def send_sms(self, to_phone_number: str, body: str, *, idempotency_key: str) -> GatewaySendResult: ...
+
+    async def verify_otp_external(self, *, external_reference: str, code: str) -> bool:
+        """Only implemented by gateways with verifies_otp_externally = True."""
+        raise NotImplementedError(
+            "verify_otp_external is only implemented by gateways with verifies_otp_externally = True"
+        )
 
     async def place_ivr_call(self, to_phone_number: str, script_id: str) -> GatewaySendResult:
         raise NotImplementedError("IVR/voice calling is not implemented in the MVP; reserved for a later phase")

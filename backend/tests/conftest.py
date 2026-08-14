@@ -12,7 +12,13 @@ from app.models.missing_person_report import (
     MissingPersonMatchCandidate,
     MissingPersonReport,
 )
-from app.models.otp import AuthSession, OtpVerification, TrustedDevice
+from app.models.otp import (
+    AuthSession,
+    EmailChange,
+    OtpVerification,
+    PhoneNumberChange,
+    TrustedDevice,
+)
 from app.models.ping import Ping, Pong
 from app.models.policy_acceptance import PolicyAcceptance
 from app.models.relative_link import RelativeLink, ResponderCredential
@@ -26,6 +32,8 @@ UNIT_TEST_TABLES = [
     OtpVerification.__table__,
     AuthSession.__table__,
     TrustedDevice.__table__,
+    PhoneNumberChange.__table__,
+    EmailChange.__table__,
     RelativeLink.__table__,
     ResponderCredential.__table__,
     Ping.__table__,

@@ -11,6 +11,9 @@ class UserMeOut(BaseModel):
 
     id: uuid.UUID
     phone_number: str
+    phone_verified: bool = False
+    email: str | None
+    email_verified: bool = False
     full_name: str | None
     blood_type: BloodType | None
     birth_date: date | None

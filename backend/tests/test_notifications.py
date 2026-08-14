@@ -1,9 +1,10 @@
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.gateways.base import MAX_SMS_SEGMENT_CHARS
 from app.models.sms import SmsOutboxEntry
+from app.models.user import User
 from app.services import auth_service
 from tests.conftest import signup_and_login
 
@@ -83,6 +84,34 @@ async def test_verified_responders_are_never_sms_notified(client, db_engine, mon
         )
         entries = result.scalars().all()
         assert entries == [], "verified responders should not receive an SMS fanout (deferred to their own frontend)"
+
+
+@pytest.mark.asyncio
+async def test_unverified_relative_is_never_sms_notified(client, db_engine):
+    # Issue #10: phone_verified_at NULL means this account has never proven
+    # it controls its own number (only possible for accounts predating that
+    # fix) -- it must not receive someone else's status over SMS until it
+    # does. Simulates that pre-fix state directly since signup_and_login
+    # always completes a real SMS verification.
+    subject = await signup_and_login(client, PHONE_SUBJECT)
+    relative = await signup_and_login(client, PHONE_RELATIVE)
+    await _accept_relative_link(client, requester=relative, target_phone=PHONE_SUBJECT, target=subject)
+
+    session_factory = async_sessionmaker(db_engine, expire_on_commit=False)
+    async with session_factory() as db:
+        await db.execute(
+            update(User).where(User.phone_number == PHONE_RELATIVE).values(phone_verified_at=None)
+        )
+        await db.commit()
+
+    resp = await client.post("/api/v1/pings", json={"status": "distress"}, headers=auth_headers(subject))
+    assert resp.status_code == 201, resp.text
+
+    async with session_factory() as db:
+        result = await db.execute(
+            select(SmsOutboxEntry).where(SmsOutboxEntry.purpose == "ping_notification")
+        )
+        assert result.scalars().all() == [], "an unverified relative must not receive the SMS fanout"
 
 
 @pytest.mark.asyncio

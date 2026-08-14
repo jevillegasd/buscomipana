@@ -109,6 +109,38 @@ confirm `role: "admin"` on `GET /api/v1/users/me`, then either remove
 numbers you're actively about to onboard — don't leave a standing list of
 numbers with silent admin auto-promotion.
 
+### Email OTP fallback (self-hosted, no external SMTP provider)
+
+The login screen's "no me llegó el SMS, enviar por correo" option (see
+`backend/app/services/email_service.py`) routes through a self-hosted
+Postfix container (`docker/postfix/`, service `postfix` in
+`docker-compose.prod.yml`) rather than a third-party SMTP provider. It's an
+unauthenticated relay reachable only from `backend` over the internal `mail`
+Docker network — no host port published, same treatment as postgres/redis.
+
+Two things worth knowing if this ever needs debugging:
+
+- **Chroot is disabled** for every Postfix service (see the `sed` in
+  `docker/postfix/Dockerfile`). Debian's default `master.cf` chroots the
+  outbound delivery agent into `/var/spool/postfix/`, which has no
+  `/etc/resolv.conf` of its own — every MX lookup failed with "Host not
+  found, try again" until this was turned off. No security benefit to the
+  chroot inside an already Docker-isolated container anyway.
+- **`myhostname` in `docker/postfix/main.cf` is pinned to this VPS's actual
+  PTR-record hostname** (`srv1898238.hstgr.cloud`), not `buscomipana.com`.
+  Receiving mail servers commonly spam-score a HELO/EHLO name that doesn't
+  match reverse DNS for the connecting IP — don't "clean this up" to match
+  the app's public domain without re-testing deliverability.
+- Logs go to `docker compose -f docker-compose.prod.yml logs postfix`
+  (`maillog_file = /dev/stdout` in `main.cf` — without it, Postfix logs via
+  syslog, which nothing in this minimal container runs, so they'd otherwise
+  go nowhere visible).
+
+If you'd rather use an external provider (SES, SendGrid, etc.) instead of
+self-hosting: just point `SMTP_HOST`/`SMTP_PORT`/`SMTP_USERNAME`/
+`SMTP_PASSWORD`/`SMTP_USE_TLS` at that provider in `.env.production` and
+remove the `postfix` service — `email_service.py` doesn't care which.
+
 ## What's already hardened
 
 - Every mutating/expensive endpoint is rate-limited per client IP (or per

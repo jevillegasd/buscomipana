@@ -36,6 +36,39 @@ class Settings(BaseSettings):
     infobip_sender_id: str = "Buscomipana"
     infobip_webhook_shared_secret: str = "change-me"
 
+    # OTP codes go through Infobip's dedicated 2FA product (/2fa/2/...), not
+    # the generic SMS API -- several Colombian carriers reject OTP traffic
+    # sent over the generic route ("Account not provisioned for the
+    # requested channel", error 592 / REJECTED_NETWORK). Leave both blank to
+    # have InfobipGateway auto-provision a 2FA Application + Message
+    # Template on first use (see infobip_gateway.py); once provisioned it
+    # logs the IDs so they can be pinned here instead of re-provisioning a
+    # new pair on every process restart.
+    infobip_2fa_application_id: str = ""
+    infobip_2fa_message_id: str = ""
+
+    # Alternate SMS_GATEWAY value ("twilio") -- a fallback provider for when a
+    # carrier/country blocks traffic on the primary one. messaging_service_sid
+    # takes precedence over from_number when both are set (see
+    # TwilioGateway.send_sms).
+    twilio_account_sid: str = ""
+    twilio_auth_token: str = ""
+    twilio_from_number: str = ""
+    twilio_messaging_service_sid: str = ""
+
+    # Email OTP fallback -- an alternate delivery channel for the same
+    # phone-linked account, offered on the login screen when SMS doesn't
+    # arrive (see services/email_service.py, auth_service.request_login_otp).
+    # Plain SMTP rather than a provider SDK: works unchanged against Gmail,
+    # Outlook/Office365, SES, SendGrid, etc. -- whichever the deploy has
+    # credentials for, no provider-specific code.
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from_address: str = ""
+    smtp_use_tls: bool = True
+
     admin_phone_numbers: str = ""
 
     otp_code_length: int = 6

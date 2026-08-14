@@ -47,6 +47,7 @@ class MediaStorageBackend(str, enum.Enum):
 class OtpPurpose(str, enum.Enum):
     signup_or_login = "signup_or_login"
     phone_change = "phone_change"
+    email_change = "email_change"
 
 
 class Channel(str, enum.Enum):
@@ -54,6 +55,10 @@ class Channel(str, enum.Enum):
     sms = "sms"
     ivr_call = "ivr_call"
     ussd = "ussd"
+    # OTP delivery only (see OtpVerification.channel) -- a fallback when SMS
+    # is unreliable/blocked for a given carrier or country. Not a ping/pong
+    # channel, so it's never used on Ping/Pong.channel.
+    email = "email"
 
 
 class RelationshipType(str, enum.Enum):

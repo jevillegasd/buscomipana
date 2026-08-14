@@ -32,6 +32,8 @@ async def _build_user_me_out(db: AsyncSession, user: User) -> UserMeOut:
         update={
             "has_profile_photo": asset is not None,
             "needs_privacy_policy_acceptance": needs_policy_acceptance,
+            "phone_verified": user.phone_verified_at is not None,
+            "email_verified": user.email_verified_at is not None,
         }
     )
 

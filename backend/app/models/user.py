@@ -18,9 +18,30 @@ class User(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
             unique=True,
             postgresql_where=text("deleted_at IS NULL"),
         ),
+        Index(
+            "users_email_active_uq",
+            "email",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL AND email IS NOT NULL"),
+        ),
     )
 
     phone_number: Mapped[str] = mapped_column(String(32), nullable=False)
+    # Set only via the authenticated request_email_change/confirm_email_change
+    # flow (see auth_service) -- never accepted as free text on the
+    # unauthenticated login endpoint (see Issue #10: that was an
+    # account-takeover hole). email_verified_at is set the moment
+    # confirm_email_change succeeds; there's no "unverified email" state,
+    # since the confirm step itself is the verification.
+    email: Mapped[str | None] = mapped_column(String(320))
+    email_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Set the moment a real SMS-delivered OTP is consumed for this phone
+    # number (new account or existing) -- see auth_service.verify_login_otp.
+    # NULL means this account has never completed a real SMS verification,
+    # which is only possible for accounts created before Issue #10 was fixed
+    # (through the vulnerable email-any-address path) -- they're required to
+    # complete one on next login before phone_verified_at is set.
+    phone_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     full_name: Mapped[str | None] = mapped_column(String(200))
     blood_type: Mapped[BloodType | None] = mapped_column(str_enum(BloodType, 6))
     birth_date: Mapped[date | None] = mapped_column(Date)

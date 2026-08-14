@@ -9,6 +9,8 @@ from app.core.limiter import limiter
 from app.deps import get_current_user
 from app.models.user import User
 from app.schemas.auth import (
+    EmailChangeConfirmIn,
+    EmailChangeRequestIn,
     OtpRequestIn,
     OtpVerifyIn,
     PhoneNumberChangeConfirmIn,
@@ -54,6 +56,18 @@ def _clear_auth_cookies(response: Response) -> None:
     response.delete_cookie(settings.refresh_token_cookie_name, path="/api/v1/auth")
 
 
+def _mask_email(email: str) -> str:
+    """b***a@outlook.com -- lets the login screen show *where* a code went
+    without fully exposing the stored address on a screen someone else might
+    be looking at (a shared/borrowed phone, shoulder-surfing)."""
+    local, _, domain = email.partition("@")
+    if len(local) <= 2:
+        masked_local = local[0] + "*" * max(len(local) - 1, 1)
+    else:
+        masked_local = local[0] + "*" * (len(local) - 2) + local[-1]
+    return f"{masked_local}@{domain}"
+
+
 def _set_remember_device_cookie(response: Response, device_token: str) -> None:
     response.set_cookie(
         settings.remember_device_cookie_name,
@@ -78,12 +92,26 @@ async def request_otp(request: Request, body: OtpRequestIn, response: Response, 
         return {"detail": "Dispositivo de confianza, código omitido", "skipped_otp": True}
 
     try:
-        await auth_service.request_login_otp(db, phone_number=body.phone_number)
+        # Issue #10: use_email chooses the channel only -- request_login_otp
+        # resolves it to whatever email is already stored+verified on this
+        # phone_number's account (or refuses, below), never a client-supplied
+        # address. That's what closes the account-takeover hole this used to
+        # have (any caller could supply any email for any phone_number and
+        # receive that number's OTP themselves).
+        otp = await auth_service.request_login_otp(
+            db, phone_number=body.phone_number, use_email=body.use_email
+        )
     except auth_service.UnsupportedCountry:
         await db.rollback()
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             "Por ahora BuscoMiPana solo está disponible en Colombia y Emiratos Árabes Unidos.",
+        )
+    except auth_service.NoVerifiedEmailOnFile:
+        await db.rollback()
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Este número no tiene un correo verificado asociado. Inicia sesión por SMS.",
         )
     except auth_service.OtpCooldownActive as exc:
         await db.rollback()
@@ -99,6 +127,7 @@ async def request_otp(request: Request, body: OtpRequestIn, response: Response, 
         "detail": "OTP sent",
         "skipped_otp": False,
         "resend_cooldown_seconds": settings.otp_resend_cooldown_seconds,
+        "email_hint": _mask_email(otp.email_address) if otp.email_address else None,
     }
 
 
@@ -205,3 +234,48 @@ async def confirm_phone_change(
     await db.commit()
     _set_auth_cookies(response, access_token=access_token, refresh_token=refresh_token)
     return TokenPairOut(access_token=access_token, refresh_token=refresh_token)
+
+
+@router.post("/email/request", status_code=status.HTTP_202_ACCEPTED)
+@limiter.limit("5/minute")
+async def request_email_change(
+    request: Request,
+    body: EmailChangeRequestIn,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        await auth_service.request_email_change(db, user=user, new_email=body.new_email)
+    except auth_service.PhoneNotVerified:
+        await db.rollback()
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Primero debes verificar tu número por SMS antes de asociar un correo.",
+        )
+    except auth_service.EmailTaken:
+        await db.rollback()
+        raise HTTPException(status.HTTP_409_CONFLICT, "Ese correo ya está en uso")
+    except auth_service.OtpCooldownActive as exc:
+        await db.rollback()
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={
+                "message": "Espera antes de solicitar otro código.",
+                "retry_after_seconds": exc.retry_after_seconds,
+            },
+        )
+    await db.commit()
+    return {"detail": "OTP sent to new email", "resend_cooldown_seconds": settings.otp_resend_cooldown_seconds}
+
+
+@router.post("/email/confirm", status_code=status.HTTP_200_OK)
+async def confirm_email_change(
+    body: EmailChangeConfirmIn, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+):
+    try:
+        await auth_service.confirm_email_change(db, user=user, new_email=body.new_email, code=body.code)
+    except auth_service.OtpError:
+        await db.rollback()
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid or expired code")
+    await db.commit()
+    return {"detail": "Email verified"}

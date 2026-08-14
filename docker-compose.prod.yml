@@ -1,4 +1,4 @@
-# Production stack: microsegmented into three Docker networks so a
+# Production stack: microsegmented into four Docker networks so a
 # compromised service only ever has network access to what it actually
 # needs (Zero Trust / least-privilege, enforced at the network layer, not
 # just application auth):
@@ -8,6 +8,9 @@
 #   data  -- backend/celery <-> postgres/redis. Unreachable from edge or app;
 #            postgres/redis publish no host ports at all, so they're also
 #            unreachable from outside the Docker host entirely.
+#   mail  -- backend <-> postfix (outbound OTP-email relay). Same
+#            no-host-port treatment as data -- postfix is reachable only
+#            from backend, never from the internet.
 #
 # See DEPLOYMENT.md for first-time setup (secrets, Cloudflare Tunnel, running
 # migrations) -- this file alone won't boot a working stack.
@@ -17,6 +20,13 @@ networks:
   edge:
   app:
   data:
+  mail:
+    ipam:
+      config:
+        # Fixed so postfix's mynetworks (docker/postfix/main.cf) can name
+        # this subnet exactly instead of a broad guess across all of Docker's
+        # default bridge range.
+        - subnet: 172.30.0.0/24
 
 services:
   postgres:
@@ -45,6 +55,19 @@ services:
       retries: 10
     restart: unless-stopped
 
+  postfix:
+    build:
+      context: ./docker/postfix
+    hostname: srv1898238.hstgr.cloud
+    networks: [mail]
+    volumes:
+      - postfix_spool:/var/spool/postfix
+    restart: unless-stopped
+    # No ports: mapping -- reachable only from backend, over the `mail`
+    # network (see docker/postfix/main.cf's mynetworks). Outbound delivery to
+    # the internet still works: Docker NATs container egress through the
+    # host's own network, same as every other service here.
+
   backend:
     build:
       context: ./backend
@@ -53,7 +76,7 @@ services:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       REDIS_URL: redis://redis:6379/0
       MEDIA_LOCAL_PATH: /app/media
-    networks: [app, data]
+    networks: [app, data, mail]
     volumes:
       - media_data:/app/media
     depends_on:
@@ -61,6 +84,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      postfix:
+        condition: service_started
     restart: unless-stopped
     # No ports: mapping -- only reachable through Caddy, over the `app`
     # network. The image's own CMD (Dockerfile) is already the production
@@ -145,3 +170,4 @@ volumes:
   media_data:
   caddy_data:
   caddy_config:
+  postfix_spool:

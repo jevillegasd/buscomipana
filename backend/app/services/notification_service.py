@@ -84,6 +84,14 @@ async def notify_ping(db: AsyncSession, *, ping: Ping) -> None:
     recipients_result = await db.execute(select(User).where(User.id.in_(recipient_ids)))
     gateway = get_gateway()
     for recipient in recipients_result.scalars().all():
+        # Issue #10: phone_verified_at is only set once this account has
+        # completed a real SMS-delivered OTP -- an account that hasn't
+        # (possible for accounts created before that fix, via the
+        # vulnerable email-any-address path) might not actually control this
+        # number, so it must never receive someone else's status/location
+        # data over SMS.
+        if recipient.phone_verified_at is None:
+            continue
         result = await gateway.send_sms(
             recipient.phone_number, message, idempotency_key=f"ping-notify:{ping.id}:{recipient.id}"
         )
