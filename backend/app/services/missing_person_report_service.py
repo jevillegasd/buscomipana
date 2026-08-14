@@ -181,6 +181,11 @@ async def _notify_reporters_of_match(
     )
     gateway = get_gateway()
     for reporter in reporters:
+        # Issue #10: don't SMS a number this account hasn't proven it
+        # controls via a real SMS-delivered OTP -- see notification_service.
+        # notify_ping's identical guard for the full rationale.
+        if reporter.phone_verified_at is None:
+            continue
         send_result = await gateway.send_sms(
             reporter.phone_number, message, idempotency_key=f"missing-match:{matched_user.id}:{reporter.id}"
         )

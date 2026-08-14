@@ -85,6 +85,134 @@ function ProfilePhoto({ user }: { user: UserMe }) {
   );
 }
 
+function EmailSettings({ user }: { user: UserMe }) {
+  const queryClient = useQueryClient();
+  const [newEmail, setNewEmail] = useState("");
+  const [step, setStep] = useState<"idle" | "code">("idle");
+  const [code, setCode] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [resendCooldown, setResendCooldown] = useState(0);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setInterval(() => setResendCooldown((s) => Math.max(0, s - 1)), 1000);
+    return () => clearInterval(timer);
+  }, [resendCooldown]);
+
+  const requestChange = useMutation({
+    mutationFn: () =>
+      api.post<{ detail: string; resend_cooldown_seconds?: number }>("/auth/email/request", {
+        new_email: newEmail,
+      }),
+    onSuccess: (res) => {
+      setError(null);
+      setStep("code");
+      setResendCooldown(res.resend_cooldown_seconds ?? 60);
+    },
+    onError: (err) => setError(err instanceof ApiError ? err.message : "No se pudo enviar el código"),
+  });
+
+  const confirmChange = useMutation({
+    mutationFn: () => api.post("/auth/email/confirm", { new_email: newEmail, code }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["me"] });
+      setStep("idle");
+      setCode("");
+      setNewEmail("");
+      setError(null);
+    },
+    onError: (err) => setError(err instanceof ApiError ? err.message : "Código inválido"),
+  });
+
+  // Mirrors auth_service.request_email_change's PhoneNotVerified guard --
+  // an account can't associate an email until it's proven it actually
+  // controls its own phone number (a real SMS-delivered OTP consumed).
+  // Logging in via SMS once sets this automatically; nothing extra to do
+  // here beyond explaining why the option isn't available yet.
+  if (!user.phone_verified) {
+    return (
+      <div className="rounded-md bg-card border border-card p-3 text-sm text-muted">
+        Verifica tu número por SMS (cerrando sesión y volviendo a entrar) para poder asociar un correo de
+        respaldo.
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-2 rounded-md bg-card border border-card p-3">
+      <h2 className="text-sm font-semibold text-ink">Correo de respaldo</h2>
+      <p className="text-xs text-muted">
+        Úsalo para recibir tu código de acceso si alguna vez no te llega el SMS.
+      </p>
+      {user.email && user.email_verified && <p className="text-sm text-ink">Actual: {user.email}</p>}
+
+      {step === "idle" ? (
+        <div className="flex flex-col gap-2">
+          <input
+            type="email"
+            value={newEmail}
+            onChange={(e) => setNewEmail(e.target.value)}
+            placeholder={user.email ? "Nuevo correo" : "tucorreo@ejemplo.com"}
+            className="w-full rounded-md bg-night border border-card px-3 py-2 text-ink"
+          />
+          <button
+            type="button"
+            onClick={() => requestChange.mutate()}
+            disabled={!newEmail || requestChange.isPending}
+            className="self-start rounded-md bg-brand hover:bg-brand/90 disabled:opacity-50 px-4 py-2 text-sm font-semibold text-night"
+          >
+            {requestChange.isPending ? "Enviando..." : user.email ? "Cambiar correo" : "Agregar correo"}
+          </button>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2">
+          <p className="text-xs text-muted">
+            Ingresa el código enviado a <span className="text-ink">{newEmail}</span>
+          </p>
+          <input
+            type="text"
+            inputMode="numeric"
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            placeholder="123456"
+            className="w-full rounded-md bg-night border border-card px-3 py-2 text-ink tracking-widest text-center"
+          />
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => confirmChange.mutate()}
+              disabled={!code || confirmChange.isPending}
+              className="rounded-md bg-safe hover:bg-safe/90 disabled:opacity-50 px-4 py-2 text-sm font-semibold text-night"
+            >
+              {confirmChange.isPending ? "Verificando..." : "Verificar"}
+            </button>
+            <button
+              type="button"
+              onClick={() => requestChange.mutate()}
+              disabled={resendCooldown > 0 || requestChange.isPending}
+              className="text-sm text-muted disabled:opacity-50 underline decoration-dotted"
+            >
+              {resendCooldown > 0 ? `Reenviar (${resendCooldown}s)` : "Reenviar código"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setStep("idle");
+                setCode("");
+                setError(null);
+              }}
+              className="text-sm text-muted underline"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+      {error && <p className="text-danger text-xs">{error}</p>}
+    </div>
+  );
+}
+
 export default function ProfilePage() {
   const queryClient = useQueryClient();
   const { data: user } = useQuery({ queryKey: ["me"], queryFn: () => api.get<UserMe>("/users/me") });
@@ -136,6 +264,7 @@ export default function ProfilePage() {
       </p>
 
       {user && <ProfilePhoto user={user} />}
+      {user && <EmailSettings user={user} />}
 
       <form
         onSubmit={(e) => {

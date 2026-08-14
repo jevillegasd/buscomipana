@@ -47,6 +47,7 @@ class MediaStorageBackend(str, enum.Enum):
 class OtpPurpose(str, enum.Enum):
     signup_or_login = "signup_or_login"
     phone_change = "phone_change"
+    email_change = "email_change"
 
 
 class Channel(str, enum.Enum):

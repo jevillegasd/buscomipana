@@ -22,6 +22,9 @@ export type RelationshipType =
 export interface UserMe {
   id: string;
   phone_number: string;
+  phone_verified: boolean;
+  email: string | null;
+  email_verified: boolean;
   full_name: string | null;
   blood_type: BloodType | null;
   birth_date: string | null;
@@ -65,6 +68,8 @@ export interface OtpRequestResponse {
   detail: string;
   skipped_otp: boolean;
   resend_cooldown_seconds?: number;
+  // Set only when use_email was requested and succeeded -- e.g. "b***a@outlook.com".
+  email_hint?: string | null;
 }
 
 export interface TokenPair {

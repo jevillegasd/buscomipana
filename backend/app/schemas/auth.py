@@ -10,10 +10,12 @@ class OtpRequestIn(BaseModel):
     never trigger a phone_change OTP for someone else's account."""
 
     phone_number: PhoneNumber
-    # Optional fallback delivery channel: the account is still identified by
-    # phone_number (unchanged) -- setting this only changes where the code is
-    # sent, for when SMS is unreliable/blocked for this number's carrier.
-    email: EmailAddress | None = None
+    # Chooses the delivery *channel* only -- never an address. When true, the
+    # code goes to whatever email is already stored+verified on this
+    # phone_number's account (see auth_service.request_login_otp); there is
+    # deliberately no field here to specify an arbitrary address (Issue #10:
+    # that was an account-takeover hole -- see auth.py's request_otp route).
+    use_email: bool = False
 
 
 class OtpVerifyIn(BaseModel):
@@ -40,4 +42,13 @@ class PhoneNumberChangeRequestIn(BaseModel):
 
 class PhoneNumberChangeConfirmIn(BaseModel):
     new_phone_number: PhoneNumber
+    code: str = Field(min_length=4, max_length=8)
+
+
+class EmailChangeRequestIn(BaseModel):
+    new_email: EmailAddress
+
+
+class EmailChangeConfirmIn(BaseModel):
+    new_email: EmailAddress
     code: str = Field(min_length=4, max_length=8)

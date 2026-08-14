@@ -1,0 +1,51 @@
+# Outbound-only relay for OTP/notification emails (see backend/app/services/
+# email_service.py). No inbound mail is ever received or locally delivered
+# here -- this container exists purely so the backend can hand off a message
+# and have Postfix deliver it directly to the recipient's MX, without a
+# third-party SMTP provider.
+#
+# Settings below mirror a Postfix config already tested working directly on
+# this VPS (same host, same outbound IP -- containerizing doesn't change
+# what IP mail leaves from, so don't "clean up" myhostname/mynetworks here
+# without re-testing deliverability).
+
+# Debian's postfix normally logs via syslog, which nothing in this minimal
+# container runs -- without this, delivery/bounce logs go nowhere and
+# `docker compose logs postfix` is silent even on failure.
+maillog_file = /dev/stdout
+
+smtpd_banner = $myhostname ESMTP $mail_name
+biff = no
+append_dot_mydomain = no
+compatibility_level = 3.6
+recipient_delimiter = +
+mailbox_size_limit = 0
+
+# myhostname is what this server presents in the SMTP EHLO/HELO greeting and
+# Received headers -- deliberately the VPS's actual PTR-record hostname, not
+# buscomipana.com, since receiving mail servers commonly spam-score a HELO
+# name that doesn't match reverse DNS for the connecting IP.
+myhostname = srv1898238.hstgr.cloud
+myorigin = /etc/mailname
+mydestination = localhost
+relayhost =
+
+# Only reachable from the `mail` Docker network (see docker-compose.prod.yml)
+# -- this container publishes no host port, so inet_interfaces = all is safe
+# here the same way it's safe for postgres/redis to listen on all interfaces
+# within their own Docker-internal-only networks.
+inet_interfaces = all
+inet_protocols = ipv4
+mynetworks = 127.0.0.0/8 172.30.0.0/24
+smtpd_relay_restrictions = permit_mynetworks defer_unauth_destination
+
+# TLS: opportunistic on the outbound (this server -> recipient MX) leg only.
+# There's no meaningful inbound TLS to configure -- inet_interfaces is only
+# reachable from the trusted internal `mail` network, and mynetworks already
+# gates who may relay through this server at all.
+smtp_tls_CApath = /etc/ssl/certs
+smtp_tls_security_level = may
+smtp_tls_session_cache_database = btree:${data_directory}/smtp_scache
+
+alias_maps = hash:/etc/aliases
+alias_database = hash:/etc/aliases

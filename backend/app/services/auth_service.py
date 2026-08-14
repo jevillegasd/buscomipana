@@ -21,6 +21,7 @@ from app.gateways.factory import get_gateway
 from app.models.enums import Channel, OtpPurpose, PingStatus, SmsOutboxPurpose, UserRole
 from app.models.otp import (
     AuthSession,
+    EmailChange,
     OtpVerification,
     PhoneNumberChange,
     TrustedDevice,
@@ -53,6 +54,27 @@ class PhoneNumberTaken(OtpError):
     pass
 
 
+class EmailTaken(OtpError):
+    pass
+
+
+class NoVerifiedEmailOnFile(OtpError):
+    """Raised when email-channel login is requested but this phone number
+    has no existing account with a verified email to send to. Never send an
+    OTP to a client-supplied address for login (Issue #10) -- only to
+    whatever's already on file, set via the authenticated request_email_
+    change/confirm_email_change flow."""
+
+
+class PhoneNotVerified(OtpError):
+    """Raised by request_email_change: an account can't associate/change its
+    email until phone_verified_at is set (a real SMS-delivered OTP has been
+    consumed for this number). Defense in depth for Issue #10 -- stops an
+    account that only exists because of the vulnerable email-any-address
+    path (phone_verified_at NULL) from entrenching further via email before
+    it's ever proven the phone is actually its own."""
+
+
 class UnsupportedCountry(OtpError):
     pass
 
@@ -79,9 +101,17 @@ async def _create_and_send_otp(
     )
     last = last_result.scalar_one_or_none()
     if last is not None:
+        # Switching to email for the first time skips the cooldown, even if
+        # an SMS was just sent seconds ago -- the whole point of the email
+        # fallback is for when SMS isn't arriving, so making someone wait out
+        # its cooldown before they can even try the alternative defeats the
+        # purpose. Once they've already used email, normal cooldown applies
+        # again to every further attempt on either channel (this is a one-time
+        # pass per channel switch, not a way to bypass it repeatedly).
+        is_first_switch_to_email = bool(email) and last.channel != Channel.email
         cooldown = timedelta(seconds=settings.otp_resend_cooldown_seconds)
         elapsed = datetime.now(UTC) - ensure_aware(last.created_at)
-        if elapsed < cooldown:
+        if elapsed < cooldown and not is_first_switch_to_email:
             raise OtpCooldownActive(retry_after_seconds=int((cooldown - elapsed).total_seconds()) + 1)
 
     # Email is a fallback delivery channel for the same phone-linked account
@@ -97,6 +127,7 @@ async def _create_and_send_otp(
             purpose=purpose,
             code_hash=hash_otp_code(code),
             channel=Channel.email,
+            email_address=email,
             expires_at=datetime.now(UTC) + timedelta(minutes=settings.otp_ttl_minutes),
         )
         db.add(otp)
@@ -174,13 +205,32 @@ async def _create_and_send_otp(
     return otp
 
 
-async def request_login_otp(db: AsyncSession, phone_number: str, email: str | None = None) -> OtpVerification:
+async def request_login_otp(
+    db: AsyncSession, phone_number: str, use_email: bool = False
+) -> OtpVerification:
     # Checked before sending anything -- an unsupported-country number should
     # never cost SMS spend, and shouldn't be able to probe whether an account
-    # exists there either. Still applies when email is set: phone_number is
-    # always the account identifier, email is only ever a delivery address.
+    # exists there either.
     if not is_allowed_phone_number(phone_number):
         raise UnsupportedCountry(phone_number)
+
+    email = None
+    if use_email:
+        # Issue #10: the caller chooses the *channel*, never the address --
+        # this only ever sends to whatever's already stored+verified on the
+        # account for this phone_number, exactly like an authenticator app
+        # doesn't let you type in someone else's phone. A brand-new phone
+        # number (no account yet) has nothing to send to, by construction --
+        # first-ever verification of any phone number can only happen via
+        # real SMS, never email.
+        result = await db.execute(
+            select(User).where(User.phone_number == phone_number, User.deleted_at.is_(None))
+        )
+        user = result.scalar_one_or_none()
+        if user is None or user.email is None or user.email_verified_at is None:
+            raise NoVerifiedEmailOnFile(phone_number)
+        email = user.email
+
     return await _create_and_send_otp(
         db, phone_number=phone_number, purpose=OtpPurpose.signup_or_login, user_id=None, email=email
     )
@@ -194,6 +244,33 @@ async def request_phone_change_otp(db: AsyncSession, *, user: User, new_phone_nu
         raise PhoneNumberTaken(new_phone_number)
     return await _create_and_send_otp(
         db, phone_number=new_phone_number, purpose=OtpPurpose.phone_change, user_id=user.id
+    )
+
+
+async def request_email_change(db: AsyncSession, *, user: User, new_email: str) -> OtpVerification:
+    """Covers both the first-ever association (user.email is None) and a
+    later change -- same flow either way. Requires phone_verified_at to
+    already be set (see PhoneNotVerified's docstring): an account that's
+    never proven it controls its own phone number shouldn't be able to
+    entrench further by attaching an email before it does."""
+    if user.phone_verified_at is None:
+        raise PhoneNotVerified(user.id)
+
+    new_email = new_email.strip().lower()
+    existing = await db.execute(
+        select(User).where(User.email == new_email, User.id != user.id, User.deleted_at.is_(None))
+    )
+    if existing.scalar_one_or_none() is not None:
+        raise EmailTaken(new_email)
+
+    # Reuses _create_and_send_otp's email branch directly by always passing
+    # email=new_email -- this is the one case where the "channel switch skips
+    # cooldown" logic in that function doesn't apply (this purpose has its
+    # own independent cooldown lineage, scoped by (phone_number, purpose)
+    # same as phone_change), and code delivery/hashing/outbox auditing all
+    # stay identical to every other OTP path.
+    return await _create_and_send_otp(
+        db, phone_number=user.phone_number, purpose=OtpPurpose.email_change, user_id=user.id, email=new_email
     )
 
 
@@ -243,7 +320,7 @@ async def _consume_otp(
 
 
 async def verify_login_otp(db: AsyncSession, *, phone_number: str, code: str) -> tuple[User, bool]:
-    await _consume_otp(db, phone_number=phone_number, code=code, purpose=OtpPurpose.signup_or_login)
+    otp = await _consume_otp(db, phone_number=phone_number, code=code, purpose=OtpPurpose.signup_or_login)
 
     result = await db.execute(select(User).where(User.phone_number == phone_number, User.deleted_at.is_(None)))
     user = result.scalar_one_or_none()
@@ -253,7 +330,15 @@ async def verify_login_otp(db: AsyncSession, *, phone_number: str, code: str) ->
         # no invite system yet), so a phone number listed in ADMIN_PHONE_NUMBERS
         # is promoted to admin the moment it first signs up.
         role = UserRole.admin if phone_number in settings.admin_phone_number_list else UserRole.user
-        user = User(phone_number=phone_number, role=role)
+        # A brand-new account can only ever reach this branch via a real
+        # SMS-delivered OTP -- request_login_otp requires an *existing* user
+        # with a verified email before it'll use the email channel at all
+        # (Issue #10), so otp.channel here is always sms.
+        user = User(
+            phone_number=phone_number,
+            role=role,
+            phone_verified_at=datetime.now(UTC) if otp.channel == Channel.sms else None,
+        )
         db.add(user)
         await db.flush()
 
@@ -285,6 +370,15 @@ async def verify_login_otp(db: AsyncSession, *, phone_number: str, code: str) ->
         await relative_link_service.resolve_open_links_for_new_user(db, new_user=user)
     else:
         user.last_login_at = datetime.now(UTC)
+        # Issue #10 remediation path: an existing account whose phone was
+        # never actually proven (NULL -- only possible for accounts that
+        # predate this fix) becomes verified the moment it completes a real
+        # SMS OTP, same as a brand-new signup. Doesn't apply to an
+        # email-channel login -- that never proves phone ownership, and
+        # could only happen here anyway if phone_verified_at were already
+        # set (request_login_otp requires it to offer email at all).
+        if user.phone_verified_at is None and otp.channel == Channel.sms:
+            user.phone_verified_at = datetime.now(UTC)
 
     return user, is_new_account
 
@@ -299,6 +393,34 @@ async def confirm_phone_change(db: AsyncSession, *, user: User, new_phone_number
             user_id=user.id,
             old_phone_number=old_phone_number,
             new_phone_number=new_phone_number,
+            verified_via_otp_id=otp.id,
+            changed_at=datetime.now(UTC),
+        )
+    )
+    await db.flush()
+    return user
+
+
+async def confirm_email_change(db: AsyncSession, *, user: User, new_email: str, code: str) -> User:
+    new_email = new_email.strip().lower()
+    otp = await _consume_otp(
+        db, phone_number=user.phone_number, code=code, purpose=OtpPurpose.email_change
+    )
+    # The code alone isn't enough proof -- it must also have been the one
+    # actually sent to *this* address, otherwise an authenticated caller
+    # could request a code to their own inbox and use it to confirm a
+    # completely different address they've never proven they control.
+    if otp.email_address != new_email:
+        raise InvalidOrExpiredOtp()
+
+    old_email = user.email
+    user.email = new_email
+    user.email_verified_at = datetime.now(UTC)
+    db.add(
+        EmailChange(
+            user_id=user.id,
+            old_email=old_email,
+            new_email=new_email,
             verified_via_otp_id=otp.id,
             changed_at=datetime.now(UTC),
         )

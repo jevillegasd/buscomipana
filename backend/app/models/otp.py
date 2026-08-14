@@ -25,6 +25,12 @@ class OtpVerification(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     code_hash: Mapped[str | None] = mapped_column(String(200))
     external_reference: Mapped[str | None] = mapped_column(String(64))
     channel: Mapped[Channel] = mapped_column(str_enum(Channel, 20), nullable=False, default=Channel.sms)
+    # Set whenever channel is email -- for purpose=email_change specifically,
+    # auth_service.confirm_email_change checks this matches the new_email the
+    # caller is confirming, so a valid code can only ever confirm the exact
+    # address it was actually sent to (not an already-authenticated caller's
+    # choice of a *different* address reusing a code sent to their own inbox).
+    email_address: Mapped[str | None] = mapped_column(String(320))
     attempt_count: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=0)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -62,6 +68,21 @@ class PhoneNumberChange(UUIDPrimaryKeyMixin, Base):
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     old_phone_number: Mapped[str] = mapped_column(String(32), nullable=False)
     new_phone_number: Mapped[str] = mapped_column(String(32), nullable=False)
+    verified_via_otp_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("otp_verifications.id"), nullable=False
+    )
+    changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class EmailChange(UUIDPrimaryKeyMixin, Base):
+    """Audit trail of every email association/change (Issue #10) -- mirrors
+    PhoneNumberChange. old_email is None for the first-ever association."""
+
+    __tablename__ = "email_changes"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    old_email: Mapped[str | None] = mapped_column(String(320))
+    new_email: Mapped[str] = mapped_column(String(320), nullable=False)
     verified_via_otp_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("otp_verifications.id"), nullable=False
     )

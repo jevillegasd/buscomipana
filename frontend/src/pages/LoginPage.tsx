@@ -17,9 +17,18 @@ export default function LoginPage() {
   const [resendCooldown, setResendCooldown] = useState(0);
   const [showPolicy, setShowPolicy] = useState(false);
   const [showTerms, setShowTerms] = useState(false);
-  const [showEmailFallback, setShowEmailFallback] = useState(false);
-  const [email, setEmail] = useState("");
-  const [lastDeliveryEmail, setLastDeliveryEmail] = useState<string | null>(null);
+  // Set from the server's response (a masked hint like "b***a@outlook.com"),
+  // never something the client supplies -- login-by-email always delivers to
+  // whatever's already stored+verified on the account, never a typed-in
+  // address (see auth_service.request_login_otp / Issue #10).
+  const [emailHint, setEmailHint] = useState<string | null>(null);
+  // Switching to email for the first time (last send was still SMS) skips
+  // the resend cooldown, same as the backend (see auth_service._create_and_
+  // send_otp) -- the email fallback exists specifically for "SMS isn't
+  // arriving," so making someone wait out an SMS cooldown before they can
+  // even try it would defeat the point. Once email's been used once, normal
+  // cooldown applies to it too.
+  const emailCooldownApplies = emailHint !== null && resendCooldown > 0;
 
   useEffect(() => {
     if (resendCooldown <= 0) return;
@@ -27,13 +36,13 @@ export default function LoginPage() {
     return () => clearInterval(timer);
   }, [resendCooldown]);
 
-  async function sendOtp(deliveryEmail?: string) {
+  async function sendOtp(useEmail?: boolean) {
     setError(null);
     setLoading(true);
     try {
       const res = await api.post<OtpRequestResponse>("/auth/otp/request", {
         phone_number: phoneNumber,
-        ...(deliveryEmail ? { email: deliveryEmail } : {}),
+        use_email: !!useEmail,
       });
       if (res.skipped_otp) {
         // This browser already has a "remember me" grant for this exact
@@ -45,8 +54,7 @@ export default function LoginPage() {
       }
       setStep("code");
       setResendCooldown(res.resend_cooldown_seconds ?? 60);
-      setLastDeliveryEmail(deliveryEmail ?? null);
-      setShowEmailFallback(false);
+      setEmailHint(res.email_hint ?? null);
     } catch (err) {
       if (err instanceof ApiError && err.status === 429) {
         setResendCooldown(err.retryAfterSeconds ?? 60);
@@ -80,7 +88,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="flex-1 flex flex-col">
       <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-6 overflow-y-auto px-1 py-4">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-ink">BuscoMiPana</h1>
@@ -105,9 +113,9 @@ export default function LoginPage() {
         ) : (
           <form onSubmit={verifyCode} className="w-full max-w-xs flex flex-col gap-3">
             <p className="text-sm text-muted">
-              {lastDeliveryEmail ? (
+              {emailHint ? (
                 <>
-                  Ingresa el código enviado a <span className="text-ink">{lastDeliveryEmail}</span>
+                  Ingresa el código enviado a <span className="text-ink">{emailHint}</span>
                 </>
               ) : (
                 <>
@@ -144,37 +152,16 @@ export default function LoginPage() {
               {resendCooldown > 0 ? `Reenviar código (espera ${resendCooldown}s)` : "Reenviar código"}
             </button>
 
-            {!showEmailFallback ? (
-              <button
-                type="button"
-                onClick={() => setShowEmailFallback(true)}
-                className="text-sm text-muted underline decoration-dotted"
-              >
-                ¿No te llegó el SMS? Recíbelo por correo
-              </button>
-            ) : (
-              <div className="flex flex-col gap-2 rounded-md bg-card border border-card p-3">
-                <label className="text-sm text-muted">
-                  Correo electrónico
-                  <input
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="tucorreo@ejemplo.com"
-                    className="mt-1 w-full rounded-md bg-night border border-card px-3 py-2 text-ink"
-                  />
-                </label>
-                <button
-                  type="button"
-                  onClick={() => sendOtp(email)}
-                  disabled={loading || !email || resendCooldown > 0}
-                  className="rounded-md bg-brand hover:bg-brand/90 disabled:opacity-50 px-4 py-2 text-sm font-semibold text-night"
-                >
-                  {resendCooldown > 0 ? `Espera ${resendCooldown}s` : "Enviar código por correo"}
-                </button>
-              </div>
-            )}
+            <button
+              type="button"
+              onClick={() => sendOtp(true)}
+              disabled={loading || emailCooldownApplies}
+              className="text-sm text-muted disabled:opacity-50 underline decoration-dotted"
+            >
+              {emailCooldownApplies
+                ? `Espera ${resendCooldown}s`
+                : "¿No te llegó el SMS? Enviar por correo en su lugar"}
+            </button>
 
             <button type="button" onClick={() => setStep("phone")} className="text-sm text-muted underline">
               Usar otro número
