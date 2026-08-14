@@ -11,6 +11,7 @@ Create an account with just a phone number (OTP, no password). "Ping" that you'r
 | **[backend/app/content/manual.html](backend/app/content/manual.html)**, served live at `GET /api/v1/manual` (linked from the login screen) | End users / product | Complete user manual of every screen and feature, in Spanish (the product's UI language) — including features that are planned but **not yet implemented**, called out explicitly. |
 | **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** | Engineers | Data model, privacy/visibility model, channel abstraction (web/SMS today, IVR/USSD later), media storage, background jobs, and the complete API/environment-variable reference. |
 | **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** | Ops / whoever runs prod | Taking the stack from local dev to a real deployment, network/Zero Trust posture, secret rotation, ongoing responsibilities. |
+| **[docs/MESSAGE_TEMPLATES.md](docs/MESSAGE_TEMPLATES.md)** | Compliance / provider submissions | Every outbound SMS/email template with exact source text, a rendered example, and its trigger — the reference for SMS-provider or regulatory template-approval submissions. |
 | **[CONTRIBUTING.md](CONTRIBUTING.md)** | Contributors | Workflow, lint/test commands, security-sensitive areas that get extra review scrutiny. |
 
 ## Stack
