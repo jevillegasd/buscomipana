@@ -31,8 +31,6 @@
       "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:5173/)",
       "Bash(curl -s -o /dev/null -w \"frontend: %{http_code}\\\\n\" http://localhost:5173/)",
       "Bash(curl -s -o /dev/null -w \"backend: %{http_code}\\\\n\" http://localhost:8000/health)",
-      "Bash(git checkout *)",
-      "Bash(docker rm *)",
       "Bash(curl -sS -w '\\\\nHTTP:%{http_code}\\\\n' -X POST https://buscomipana.com/api/v1/auth/otp/request -H 'Content-Type: application/json' -d '{\"phone_number\":\"+573104661888\",\"use_email\":true}')",
       "Bash(curl -sS -w '\\\\nHTTP:%{http_code}\\\\n' -X POST https://buscomipana.com/api/v1/auth/otp/request -H 'Content-Type: application/json' -d '{\"phone_number\":\"+573167030661\"}')"
     ]
