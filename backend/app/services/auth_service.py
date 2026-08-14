@@ -108,7 +108,17 @@ async def _create_and_send_otp(
         # purpose. Once they've already used email, normal cooldown applies
         # again to every further attempt on either channel (this is a one-time
         # pass per channel switch, not a way to bypass it repeatedly).
-        is_first_switch_to_email = bool(email) and last.channel != Channel.email
+        email_ever_used_result = await db.execute(
+            select(OtpVerification)
+            .where(
+                OtpVerification.phone_number == phone_number,
+                OtpVerification.purpose == purpose,
+                OtpVerification.channel == Channel.email,
+            )
+            .limit(1)
+        )
+        email_ever_used = email_ever_used_result.scalar_one_or_none() is not None
+        is_first_switch_to_email = bool(email) and not email_ever_used
         cooldown = timedelta(seconds=settings.otp_resend_cooldown_seconds)
         elapsed = datetime.now(UTC) - ensure_aware(last.created_at)
         if elapsed < cooldown and not is_first_switch_to_email:
