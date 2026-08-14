@@ -19,6 +19,12 @@ section before touching auth, visibility, or media code.
   live at `GET /api/v1/manual`, linked from the login screen) for what a user
   sees. A feature that exists in code but isn't documented, or documented but
   not built, is a bug in the docs either way.
+- Any new or changed SMS/email template — anything sent via a
+  `NotificationGateway` implementation or `email_service` — needs a matching
+  update in [docs/MESSAGE_TEMPLATES.md](docs/MESSAGE_TEMPLATES.md). That file
+  is the reference used for SMS-provider and regulatory template-approval
+  submissions; an undocumented template is a template that hasn't been
+  approved to send.
 - Prefer small, focused pull requests over large ones. If a change touches
   both backend and frontend, that's fine in one PR as long as it's one
   coherent change — don't bundle unrelated cleanup in with a feature.
