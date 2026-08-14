@@ -1,0 +1,493 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>BuscoMiPana — Manual de usuario</title>
+<style>
+  :root {
+    --night: #17140F;
+    --card: #241F1A;
+    --card-border: #3a332a;
+    --brand: #CC8B3C;
+    --safe: #6FB98F;
+    --danger: #E1755F;
+    --pending: #E8C468;
+    --ink: #F5EFE6;
+    --muted: #B8A99A;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--night);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    line-height: 1.6;
+  }
+  a { color: var(--brand); }
+  .layout {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+  header.hero {
+    padding: 2.5rem 1.5rem 2rem;
+    border-bottom: 1px solid var(--card-border);
+  }
+  header.hero h1 { margin: 0 0 0.4rem; font-size: 1.9rem; }
+  header.hero p { margin: 0; color: var(--muted); max-width: 62ch; }
+  .badge-row { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 1rem; }
+  .badge {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    font-weight: 600;
+  }
+  .badge.live { background: rgba(111,185,143,0.15); color: var(--safe); }
+  .badge.planned { background: rgba(232,196,104,0.15); color: var(--pending); }
+  nav.toc {
+    padding: 1.5rem 1rem;
+    border-right: 1px solid var(--card-border);
+    position: sticky;
+    top: 0;
+    align-self: start;
+    height: 100vh;
+    overflow-y: auto;
+    font-size: 0.88rem;
+  }
+  nav.toc a {
+    display: block;
+    color: var(--muted);
+    text-decoration: none;
+    padding: 0.3rem 0.5rem;
+    border-radius: 6px;
+  }
+  nav.toc a:hover { color: var(--ink); background: var(--card); }
+  nav.toc .toc-heading {
+    color: var(--brand);
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 0.72rem;
+    letter-spacing: 0.05em;
+    margin: 1.1rem 0 0.2rem;
+    padding: 0 0.5rem;
+  }
+  nav.toc .toc-heading:first-child { margin-top: 0; }
+  main { padding: 1rem 2rem 4rem; min-width: 0; }
+  section { padding-top: 2.2rem; scroll-margin-top: 1rem; }
+  section h2 {
+    font-size: 1.4rem;
+    border-bottom: 1px solid var(--card-border);
+    padding-bottom: 0.5rem;
+  }
+  section h3 { font-size: 1.1rem; color: var(--ink); margin-top: 1.6rem; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: 10px;
+    padding: 1rem 1.2rem;
+    margin: 1rem 0;
+  }
+  .callout {
+    border-radius: 10px;
+    padding: 0.9rem 1.1rem;
+    margin: 1rem 0;
+    font-size: 0.94rem;
+  }
+  .callout.not-available {
+    background: rgba(232,196,104,0.1);
+    border: 1px solid rgba(232,196,104,0.35);
+    color: var(--pending);
+  }
+  .callout.not-available strong { color: var(--pending); }
+  .callout.privacy {
+    background: rgba(204,139,60,0.1);
+    border: 1px solid rgba(204,139,60,0.35);
+    color: var(--ink);
+  }
+  .callout.privacy strong { color: var(--brand); }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.92rem; }
+  th, td { text-align: left; padding: 0.5rem 0.7rem; border-bottom: 1px solid var(--card-border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.03em; }
+  code {
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: 4px;
+    padding: 0.1rem 0.35rem;
+    font-size: 0.88em;
+  }
+  .btn-demo {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-weight: 700;
+    font-size: 0.85rem;
+    padding: 0.5rem 0.9rem;
+    border-radius: 8px;
+    border: none;
+  }
+  .btn-demo.ok { background: var(--safe); color: var(--night); }
+  .btn-demo.sos { background: var(--danger); color: var(--night); }
+  .btn-demo.proxy { background: var(--brand); color: var(--night); }
+  .status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 5px;
+    font-size: 0.75rem;
+    font-weight: 700;
+  }
+  .status-pill.ok { background: rgba(111,185,143,0.15); color: var(--safe); }
+  .status-pill.sos { background: rgba(225,117,95,0.15); color: var(--danger); }
+  ul.feature-list { padding-left: 1.2rem; }
+  ul.feature-list li { margin-bottom: 0.45rem; }
+  footer.page-footer {
+    border-top: 1px solid var(--card-border);
+    margin-top: 3rem;
+    padding-top: 1.5rem;
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+  .lang-note {
+    font-size: 0.85rem;
+    color: var(--muted);
+    border-left: 3px solid var(--card-border);
+    padding-left: 0.8rem;
+    margin: 1rem 0;
+  }
+  @media (max-width: 820px) {
+    .layout { grid-template-columns: 1fr; }
+    nav.toc { position: static; height: auto; border-right: none; border-bottom: 1px solid var(--card-border); }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+  <nav class="toc">
+    <div class="toc-heading">Empezar</div>
+    <a href="#que-es">Qué es BuscoMiPana</a>
+    <a href="#cuenta">Crear cuenta e iniciar sesión</a>
+    <div class="toc-heading">Funciones</div>
+    <a href="#estado">Reportar tu estado</a>
+    <a href="#panas">Tus panas (familiares)</a>
+    <a href="#perdidos">Personas desaparecidas</a>
+    <a href="#perfil">Tu perfil</a>
+    <div class="toc-heading">Cómo funciona</div>
+    <a href="#privacidad">Privacidad y visibilidad</a>
+    <a href="#canales">SMS y canales sin app</a>
+    <a href="#sin-conexion">Modo sin conexión</a>
+    <div class="toc-heading">Estado del proyecto</div>
+    <a href="#no-disponible">Funciones aún no disponibles</a>
+    <a href="#faq">Preguntas frecuentes</a>
+    <a href="#desarrolladores">Para desarrolladores</a>
+  </nav>
+
+  <div>
+    <header class="hero">
+      <h1>BuscoMiPana — Manual de usuario</h1>
+      <p>
+        Guía completa de todo lo que la aplicación hace hoy, y de lo que está planeado pero
+        <strong>todavía no existe</strong>.
+      </p>
+      <div class="badge-row">
+        <span class="badge live">● Disponible hoy</span>
+        <span class="badge planned">● Planeado, no implementado</span>
+      </div>
+    </header>
+
+    <main>
+
+      <section id="que-es">
+        <h2>Qué es BuscoMiPana</h2>
+        <p>
+          BuscoMiPana es una aplicación web (PWA) de chequeo de estado y búsqueda de personas para
+          emergencias en Colombia y Latinoamérica. Cuando ocurre un sismo, una inundación, un
+          apagón masivo o un desplazamiento, lo primero que la gente necesita saber es si sus seres
+          queridos están bien. La app responde esa pregunta con solo un número de celular — sin
+          contraseñas, sin necesidad de que la otra persona ya tenga cuenta.
+        </p>
+        <ul class="feature-list">
+          <li><strong>Reportar tu estado</strong> ("Estoy bien" / "Necesito ayuda"), con o sin ubicación.</li>
+          <li><strong>Vincularte con tus panas</strong> (familiares o contactos de confianza) para ver su estado.</li>
+          <li><strong>Reportar a alguien como desaparecido</strong>, incluso antes de que esa persona tenga cuenta — el reporte se resuelve solo, en el momento en que esa persona se registra.</li>
+        </ul>
+        <p class="lang-note">
+          <strong>English:</strong> BuscoMiPana is a phone-first, offline-friendly safety check-in
+          and missing-person matching PWA for Colombia and Latin America. This manual documents the
+          product in Spanish because the entire product UI is Spanish-only by design; see the
+          project's <a href="https://github.com/jevillegasd/buscomipana" target="_blank" rel="noopener noreferrer">GitHub repository</a>
+          for an English-language technical overview.
+        </p>
+      </section>
+
+      <section id="cuenta">
+        <h2>Crear cuenta e iniciar sesión</h2>
+        <p>No hay contraseñas. Todo el acceso es por número de celular + un código de un solo uso (OTP):</p>
+        <ol>
+          <li>Escribe tu número de celular (con el indicativo del país).</li>
+          <li>Recibes un código de 6 dígitos por SMS. Si es la primera vez que ese número entra, la cuenta se crea automáticamente al verificar el código — no hay un paso de "registro" separado.</li>
+          <li>Escribe el código para entrar.</li>
+        </ol>
+        <h3>Si el SMS no llega</h3>
+        <p>
+          En la pantalla del código hay una opción <em>"¿No te llegó el SMS? Enviar por correo en su
+          lugar"</em>. Solo aparece una vez que tu cuenta ya verificó su número por SMS al menos una
+          vez (para probar que el número es tuyo) y que hayas agregado un correo de respaldo en tu
+          <a href="#perfil">perfil</a>. El código llega al correo guardado — nunca a uno que se
+          escriba en ese momento, para que nadie pueda redirigir tu código a un correo ajeno.
+        </p>
+        <h3>Reenvío y "recordarme"</h3>
+        <p>
+          Hay un tiempo de espera antes de poder pedir un código nuevo (para no saturar el número
+          con SMS). Si vuelves a entrar poco después de haber cerrado sesión desde el mismo
+          navegador, la app puede saltarse el paso del código automáticamente.
+        </p>
+      </section>
+
+      <section id="estado">
+        <h2>Reportar tu estado <span class="badge live">Disponible</span></h2>
+        <p>La pantalla principal ("Estado") es el corazón de la app: dos botones grandes, pensados para usarse bajo estrés y con poca batería o señal.</p>
+        <div class="card">
+          <button class="btn-demo ok">✓ ESTOY BIEN</button>
+          &nbsp;
+          <button class="btn-demo sos">▲ NECESITO AYUDA</button>
+          &nbsp;
+          <button class="btn-demo proxy">👥 REPORTAR POR UN PANA</button>
+        </div>
+        <ul class="feature-list">
+          <li><strong>Mensaje corto (opcional)</strong> — hasta 140 caracteres visibles en el formulario; el backend recorta el texto final para que quepa en un solo SMS (160 caracteres) si esa persona recibe una notificación por mensaje de texto.</li>
+          <li><strong>Compartir ubicación</strong> — casilla activada por defecto; toma tu posición del GPS del navegador en el momento del reporte. Solo la ven tus familiares con vínculo aceptado o personal de emergencia verificado (ver <a href="#privacidad">Privacidad</a>). Si la desactivas, o el navegador no da permiso, el reporte se envía sin coordenadas.</li>
+          <li><strong>Reportar por un pana</strong> — para cuando alguien no tiene su teléfono a la mano: eliges un familiar ya vinculado y reportas su estado en su nombre. Ese reporte queda siempre marcado como "reportado por" esa otra persona — nunca se hace pasar por un reporte directo de quien realmente lo vivió.</li>
+          <li><strong>Historial</strong> — debajo de los botones, la lista de tus reportes anteriores con hora relativa ("hace 5 min"), ubicación (enlace a Google Maps) y si fue un reporte directo o por un pana.</li>
+        </ul>
+      </section>
+
+      <section id="panas">
+        <h2>Tus panas (familiares y contactos) <span class="badge live">Disponible</span></h2>
+        <p>
+          "Pana" es como la app le dice a un familiar o contacto de confianza vinculado a tu cuenta.
+          El vínculo requiere un apretón de manos mutuo:
+        </p>
+        <ol>
+          <li>Escribe el número de celular de la persona y, si quieres, el tipo de parentesco (hijo/a, padre/madre, hermano/a, pareja, etc.).</li>
+          <li>Se envía una solicitud de vínculo. Si ese número aún no tiene cuenta en BuscoMiPana, la solicitud queda pendiente y se activa sola en cuanto esa persona se registre.</li>
+          <li>La otra persona puede <strong>Aceptar</strong> o <strong>Rechazar</strong> desde su propia pantalla de Panas.</li>
+        </ol>
+        <p>Una vez aceptado el vínculo, ambas personas pueden ver:</p>
+        <ul class="feature-list">
+          <li>El estado más reciente del otro (Bien / Necesita ayuda) con hora relativa.</li>
+          <li>Su ubicación más reciente, si la compartió en ese reporte (enlace directo a Google Maps).</li>
+          <li>Su foto de perfil, si la tiene.</li>
+        </ul>
+        <p>Cualquiera de las dos personas puede eliminar el vínculo en cualquier momento — hacerlo revoca el acceso a la ubicación de inmediato.</p>
+      </section>
+
+      <section id="perdidos">
+        <h2>Reportar a alguien desaparecido o en pie <span class="badge live">Disponible</span></h2>
+        <div class="callout privacy">
+          <strong>Importante:</strong> BuscoMiPana no es un registro público de personas
+          desaparecidas. Esta información solo es visible a personas con vínculos confirmados
+          (familiares aceptados) u organismos de socorro certificados, salvo la foto del reporte
+          (ver más abajo).
+        </div>
+        <p>El formulario de reporte pide:</p>
+        <ul class="feature-list">
+          <li>Nombre completo y número de celular de la persona (obligatorios) — el número es la clave que cruza el reporte con una cuenta real, exista o no todavía.</li>
+          <li>Parentesco, fecha en que desapareció, lugar donde se le vio por última vez, ropa que llevaba, señas particulares (cicatrices, tatuajes) — todos opcionales, pero ayudan a identificarla.</li>
+          <li>Una foto (opcional) — requiere marcar <strong>dos</strong> casillas de consentimiento antes de poder subirla: que la foto se muestre públicamente para ayudar a encontrar a la persona, y que pueda usarse en un futuro sistema de reconocimiento por IA (ver <a href="#no-disponible">funciones no disponibles</a> — esa parte de IA todavía no existe, pero el consentimiento se pide desde ya).</li>
+        </ul>
+        <h3>Resolución automática</h3>
+        <p>
+          Si el número reportado ya tiene cuenta, o la crea después, el reporte se marca como
+          <strong>Encontrado</strong> automáticamente y se le avisa a quien lo reportó — sin que
+          nadie tenga que hacer nada manualmente. Mientras tanto, BuscoMiPana también busca
+          coincidencias aproximadas (números parecidos, nombres similares) y las muestra como
+          "candidatos" con un porcentaje de coincidencia, para que la persona que reportó pueda
+          confirmar manualmente si alguno de esos candidatos es quien busca.
+        </p>
+      </section>
+
+      <section id="perfil">
+        <h2>Tu perfil <span class="badge live">Disponible</span></h2>
+        <p>Datos que ayudan al personal de emergencia a identificarte si te encuentran en una situación crítica:</p>
+        <table>
+          <thead><tr><th>Campo</th><th>Para qué sirve</th></tr></thead>
+          <tbody>
+            <tr><td>Foto de perfil</td><td>Visible para ti y tus panas vinculados.</td></tr>
+            <tr><td>Nombre completo</td><td>Identificación básica.</td></tr>
+            <tr><td>Tipo de sangre</td><td>Información médica de emergencia.</td></tr>
+            <tr><td>Fecha de nacimiento</td><td>Identificación.</td></tr>
+            <tr><td>Género distinguible</td><td>Cómo te ves, para que un rescatista pueda reconocerte — no es un dato legal.</td></tr>
+            <tr><td>Lugar de residencia / Nacionalidad</td><td>Contexto adicional.</td></tr>
+            <tr><td>Número de identificación (cédula)</td><td>Solo visible para ti y para familiares vinculados o personal verificado — es el campo más protegido del perfil.</td></tr>
+            <tr><td>Correo de respaldo</td><td>Habilita el inicio de sesión por correo si el SMS falla (ver <a href="#cuenta">Crear cuenta</a>). Requiere haber verificado tu número por SMS primero.</td></tr>
+          </tbody>
+        </table>
+        <p>Todos los campos son opcionales excepto el número de teléfono, que es tu identidad de cuenta.</p>
+      </section>
+
+      <section id="privacidad">
+        <h2>Cómo funciona la privacidad</h2>
+        <p>Una sola regla decide quién ve qué: <strong>eres tú mismo, un familiar con vínculo aceptado, o personal de emergencia verificado.</strong> Esa regla se aplica de forma consistente a todo lo sensible:</p>
+        <table>
+          <thead><tr><th>Dato</th><th>Quién lo ve</th></tr></thead>
+          <tbody>
+            <tr><td>Que estás "Bien" o "Necesitas ayuda"</td><td>Cualquier persona con cuenta que conozca tu perfil — es información que se busca que sea ampliamente visible en una emergencia.</td></tr>
+            <tr><td>Tu ubicación exacta en un reporte</td><td>Solo tú, tus panas con vínculo aceptado, o personal verificado.</td></tr>
+            <tr><td>Tu foto de perfil</td><td>Solo tú, tus panas con vínculo aceptado, o personal verificado.</td></tr>
+            <tr><td>Tu número de identificación</td><td>Solo tú, tus panas con vínculo aceptado, o personal verificado.</td></tr>
+            <tr><td>Foto de un reporte de persona desaparecida</td><td>Cualquier persona con cuenta — a propósito, porque el objetivo de esa foto es ayudar a identificar a alguien en riesgo, y así lo autoriza el consentimiento pedido al subirla.</td></tr>
+          </tbody>
+        </table>
+        <p>
+          Un reporte hecho <strong>por un pana en nombre de otra persona</strong> siempre se etiqueta
+          como tal, tanto en la app como en cualquier notificación por SMS — nunca se hace ver como
+          si la propia persona lo hubiera enviado.
+        </p>
+      </section>
+
+      <section id="canales">
+        <h2>SMS y canales sin necesitar la app</h2>
+        <p>
+          BuscoMiPana no depende de que la otra persona tenga la app abierta para enterarse de algo:
+          cuando reportas tu estado o respondes a un vínculo, tus panas reciben una notificación por
+          SMS con el mismo contenido que verían en pantalla, incluida la etiqueta de "reportado por"
+          cuando aplica.
+        </p>
+        <p>
+          Además, el sistema puede recibir mensajes SMS entrantes (por ejemplo <code>PING OK</code>,
+          <code>PING SOS</code>) desde un teléfono que ni siquiera tenga la app instalada, y los
+          procesa exactamente igual que un reporte hecho desde la pantalla — es la misma vía de
+          entrada, solo que por texto en lugar del navegador. Esto es lo que hace posible que, en el
+          futuro, alguien sin ningún tipo de conexión a internet pueda seguir usando BuscoMiPana por
+          SMS puro.
+        </p>
+      </section>
+
+      <section id="sin-conexion">
+        <h2>Modo sin conexión</h2>
+        <p>
+          BuscoMiPana es una app instalable (PWA) pensada para funcionar bajo mala señal. Hoy en día,
+          cuando el navegador detecta que no hay red, aparece un aviso en la parte superior de la
+          pantalla:
+        </p>
+        <div class="card">Sin red. Tu estado se enviará tan pronto vuelva la señal.</div>
+        <div class="callout not-available">
+          <strong>Aún no disponible:</strong> ese aviso describe el comportamiento planeado, pero hoy
+          la app <strong>no guarda tu reporte en el dispositivo para reenviarlo automáticamente</strong>
+          cuando vuelva la señal — si envías un reporte sin conexión, la solicitud simplemente falla y
+          hay que intentarlo de nuevo manualmente cuando vuelva la red. El envío en cola en segundo
+          plano (offline background sync) es una función planeada, no construida todavía.
+        </div>
+      </section>
+
+      <section id="no-disponible">
+        <h2>Funciones aún no disponibles</h2>
+        <p>
+          Estas son funciones que forman parte de la visión del producto o que se mencionan/insinúan
+          en la interfaz, pero que <strong>todavía no existen</strong> en el sistema. Se listan aquí
+          explícitamente para que quede claro qué se puede prometer hoy y qué no.
+        </p>
+
+        <h3>Aplicaciones nativas (iOS / Android)</h3>
+        <div class="callout not-available">
+          BuscoMiPana existe hoy únicamente como una aplicación web instalable (PWA) — no hay una app
+          nativa en App Store ni Google Play. La PWA se puede "instalar" desde el navegador (ícono en
+          la pantalla de inicio), pero sigue siendo una web app, no un binario nativo.
+        </div>
+
+        <h3>Envío de SMS sin acceso a internet, desde una app dedicada</h3>
+        <div class="callout not-available">
+          El sistema ya sabe <em>recibir y procesar</em> SMS entrantes desde cualquier teléfono, con o
+          sin la app instalada (ver <a href="#canales">SMS y canales</a>) — esa parte funciona. Lo que
+          no existe todavía es una <strong>aplicación cliente</strong> dedicada (nativa o de escritorio)
+          que le permita a la persona <em>usar</em> BuscoMiPana completamente offline, componiendo y
+          enviando ese SMS por sí misma sin necesitar datos móviles ni wifi en absoluto. Hoy, para usar
+          la app hay que tener conexión a internet para cargar la web app; el envío de SMS sin
+          internet solo funciona en la dirección "el sistema le manda un SMS a alguien", no al revés
+          desde una app instalada sin datos.
+        </div>
+
+        <h3>Llamadas de voz (IVR) y USSD</h3>
+        <div class="callout not-available">
+          Reportar tu estado marcando un número y siguiendo un menú de voz, o mediante un código USSD
+          (como los que se usan para consultar saldo sin internet), está reservado en el diseño del
+          sistema pero no implementado. Intentar usarlo hoy devuelve un error explícito de "función no
+          disponible".
+        </div>
+
+        <h3>Reconocimiento de personas en fotos por inteligencia artificial</h3>
+        <div class="callout not-available">
+          El formulario de reporte de persona desaparecida ya pide consentimiento explícito para
+          "procesar la foto con IA para buscar coincidencias" — pero ese motor de coincidencia por IA
+          en sí no está construido. Hoy las coincidencias se calculan solo por número de teléfono,
+          nombre y cercanía geográfica aproximada, nunca por reconocimiento facial ni análisis de
+          imagen.
+        </div>
+
+        <h3>Envío de reportes en cola sin conexión</h3>
+        <div class="callout not-available">
+          Ver <a href="#sin-conexion">Modo sin conexión</a> — el aviso de "tu estado se enviará tan
+          pronto vuelva la señal" describe una función planeada, no el comportamiento actual.
+        </div>
+
+        <h3>WhatsApp</h3>
+        <div class="callout not-available">
+          No hay integración con WhatsApp todavía. El diseño del sistema lo permite como una extensión
+          natural del mismo mecanismo que ya usa SMS, pero no ha sido solicitado ni construido.
+        </div>
+
+        <h3>Panel de estadísticas / analítica</h3>
+        <div class="callout not-available">
+          El sistema ya guarda un historial anonimizado de reportes para análisis de patrones
+          (ej. detectar zonas con muchos reportes de auxilio), pero no existe todavía un panel visual
+          ni tablero (dashboard) para explorar esos datos.
+        </div>
+
+        <h3>Verificación de organismos de socorro</h3>
+        <div class="callout not-available">
+          Hoy, verificar a un organismo de socorro (por ejemplo, Cruz Roja) como "personal
+          verificado" es un proceso manual hecho por un administrador — no hay todavía un flujo de
+          carga de documentos ni verificación automática de credenciales.
+        </div>
+      </section>
+
+      <section id="faq">
+        <h2>Preguntas frecuentes</h2>
+        <h3>¿Necesito internet para usar BuscoMiPana?</h3>
+        <p>Para cargar la app sí, hoy en día. Para <em>recibir</em> notificaciones de tus panas no — llegan por SMS aunque no tengas datos móviles.</p>
+        <h3>¿Alguien puede ver dónde estoy sin que yo lo sepa?</h3>
+        <p>No. Tu ubicación exacta solo la ven personas con quienes ya aceptaste un vínculo, o personal de emergencia verificado. Nadie más, ni siquiera si conoce tu número.</p>
+        <h3>¿Qué pasa si reporto a alguien que no tiene cuenta todavía?</h3>
+        <p>El reporte queda abierto. En el momento en que esa persona se registre con ese número, el reporte se cierra solo y se te avisa.</p>
+        <h3>¿Puedo eliminar un vínculo con un familiar?</h3>
+        <p>Sí, cualquiera de las dos personas puede hacerlo en cualquier momento desde la pantalla de Panas.</p>
+        <h3>¿La app envía mensajes de mercadeo?</h3>
+        <p>No. Todo el tráfico de SMS es transaccional (código de acceso, o notificación de un cambio de estado real), nunca contenido promocional.</p>
+      </section>
+
+      <section id="desarrolladores">
+        <h2>Para desarrolladores</h2>
+        <p>
+          Este manual describe el producto desde el punto de vista de quien lo usa. Si vas a trabajar
+          en el código, la documentación técnica vive en el repositorio:
+        </p>
+        <ul class="feature-list">
+          <li><a href="https://github.com/jevillegasd/buscomipana#readme" target="_blank" rel="noopener noreferrer">README.md</a> — cómo levantar el proyecto localmente y estructura del repositorio.</li>
+          <li><a href="https://github.com/jevillegasd/buscomipana/blob/main/docs/ARCHITECTURE.md" target="_blank" rel="noopener noreferrer">ARCHITECTURE.md</a> — modelo de datos, modelo de privacidad, superficie de la API, variables de entorno, pruebas, y la lista técnica de limitaciones conocidas.</li>
+          <li><a href="https://github.com/jevillegasd/buscomipana/blob/main/docs/DEPLOYMENT.md" target="_blank" rel="noopener noreferrer">DEPLOYMENT.md</a> — cómo desplegar en producción y la postura de seguridad de red.</li>
+        </ul>
+      </section>
+
+      <footer class="page-footer">
+        <p>BuscoMiPana · Contacto: contact@buscomipana.com</p>
+      </footer>
+    </main>
+  </div>
+</div>
+</body>
+</html>

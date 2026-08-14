@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { api, ApiError, markLoggedIn } from "../api/client";
+import { API_BASE_URL, api, ApiError, markLoggedIn } from "../api/client";
 import { DEFAULT_COUNTRY } from "../api/countries";
 import PhoneNumberInput from "../components/PhoneNumberInput";
 import PrivacyPolicyModal from "../components/PrivacyPolicyModal";
@@ -108,6 +108,14 @@ export default function LoginPage() {
             >
               {loading ? "Enviando..." : "Login (OTP)"}
             </button>
+            <a
+              href={`${API_BASE_URL}/manual`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-center text-muted underline decoration-dotted hover:text-ink"
+            >
+              ¿Primera vez aquí? Ver el manual de usuario
+            </a>
             {error && <p className="text-danger text-sm">{error}</p>}
           </form>
         ) : (

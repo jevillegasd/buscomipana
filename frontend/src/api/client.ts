@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1";
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1";
 
 // The actual access/refresh tokens live only in HttpOnly cookies set by the
 // backend (see backend/app/api/v1/auth.py) -- JS never touches them. This flag

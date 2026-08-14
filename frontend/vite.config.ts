@@ -7,6 +7,20 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
+      workbox: {
+        // Workbox's default NavigationRoute has no exclusions -- it treats
+        // every top-level navigation (including a plain <a href> click) as
+        // an SPA route and serves the cached index.html for it, offline or
+        // not. Without this denylist it swallows navigations to
+        // backend-served pages (notably GET /api/v1/manual, linked from the
+        // login screen) and any admin/docs route too: the SPA shell loads,
+        // React Router doesn't recognize the path, and RequireAuth bounces
+        // an unauthenticated visitor to /login -- which looks exactly like
+        // "the link doesn't work" even though the backend serves it fine.
+        // Mirrors the same path set the Caddyfile already routes to the
+        // backend in production (see ../Caddyfile's @backend matcher).
+        navigateFallbackDenylist: [/^\/api\//, /^\/admin/, /^\/health/, /^\/docs/, /^\/redoc/, /^\/openapi\.json/],
+      },
       manifest: {
         name: "BuscoMiPana",
         short_name: "BuscoMiPana",

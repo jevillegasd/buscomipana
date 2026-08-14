@@ -4,6 +4,7 @@ from app.api.v1 import (
     admin,
     auth,
     debug,
+    manual,
     missing_person_reports,
     pings,
     policy,
@@ -17,6 +18,7 @@ from app.api.v1 import (
 api_router = APIRouter(prefix="/api/v1")
 api_router.include_router(auth.router)
 api_router.include_router(policy.router)
+api_router.include_router(manual.router)
 api_router.include_router(users.router)
 api_router.include_router(relative_links.router)
 api_router.include_router(pings.router)
