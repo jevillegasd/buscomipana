@@ -7,7 +7,7 @@ interface TermsOfServiceModalProps {
 }
 
 export default function TermsOfServiceModal({ onClose }: TermsOfServiceModalProps) {
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ["terms-of-service"],
     queryFn: () => api.get<TermsDocument>("/policy/terms"),
   });
