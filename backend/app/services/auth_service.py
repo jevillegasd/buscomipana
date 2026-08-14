@@ -165,7 +165,7 @@ async def _create_and_send_otp(
             purpose=purpose,
             code_hash=None,
             external_reference=result.external_reference,
-            channel="sms",
+            channel=Channel.sms,
             expires_at=datetime.now(UTC) + timedelta(minutes=settings.otp_ttl_minutes),
         )
         db.add(otp)
