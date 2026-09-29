@@ -2,7 +2,7 @@
 
 A phone-first safety check-in and missing-person matching platform for Colombia and Latin America, built to keep working when connectivity is poor.
 
-Test it in [buscomipana.com](https://buscomipana.com/login), want to contribute, get in contact to [elnucleo.science](mailto:elnucleo.science@outlook.com?subject=Contribute%20to%20BuscoMiPana&body=hey!%20I'd%20like%20to%20join%20BuscoMiPana's%20development).
+Test it in [buscomipana.com](https://buscomipana.com/login), want to contribute, get in contact to [elnucleo.science](mailto:contact@buscomipana.com?subject=Contribute%20to%20BuscoMiPana&body=hey!%20I'd%20like%20to%20join%20BuscoMiPana's%20development).
 
 Create an account with just a phone number (OTP, no password). "Ping" that you're OK or in distress, optionally with location. Link with relatives (mutual handshake) so they can see your status and, once linked, your location. Report someone as missing or standing, even before they have an account — the report resolves automatically the moment that phone number signs up. Everything in the product UI is in Spanish; the codebase, API, and database are in English so the backend stays usable by non-Spanish-speaking integrators.
 
